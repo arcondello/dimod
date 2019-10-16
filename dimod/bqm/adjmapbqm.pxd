@@ -29,6 +29,9 @@ from libcpp.vector cimport vector
 ctypedef unsigned int VarIndex
 ctypedef double Bias
 
+# ctypedef vector[pair[map[VarIndex, Bias], Bias]].iterator AdjIterator
+# ctypedef map[VarIndex, Bias].iterator NeighborhoodIterator
+
 
 cdef class cyAdjMapBQM:
     cdef vector[pair[map[VarIndex, Bias], Bias]] adj_

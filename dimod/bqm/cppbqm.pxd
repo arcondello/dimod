@@ -40,6 +40,10 @@ cdef extern from "src/adjarray.h" namespace "dimod" nogil:
                                       const vector[pair[V, B]]&,
                                       V, V)
 
+    pair[vector[pair[V, B]].const_iterator,
+         vector[pair[V, B]].const_iterator] neighborhood[V, B](
+        const vector[pair[size_t, B]]&, const vector[pair[V, B]]&, V)
+
     void set_linear[V, B](vector[pair[size_t, B]]&,
                           vector[pair[V, B]]&,
                           V, B)
@@ -83,6 +87,10 @@ cdef extern from "src/adjvector.h" namespace "dimod" nogil:
 
     B get_linear[V, B](vector[pair[vector[pair[V, B]], B]]&, V)
     pair[B, bool] get_quadratic[V, B](vector[pair[vector[pair[V, B]], B]]&, V, V)
+
+    pair[vector[pair[vector[pair[V, B]], B]].const_iterator,
+         vector[pair[vector[pair[V, B]], B]].const_iterator] linear_iterator[V, B](
+            vector[pair[vector[pair[V, B]], B]]&)
 
     void set_linear[V, B](vector[pair[vector[pair[V, B]], B]]&, V, B)
     bool set_quadratic[V, B](vector[pair[vector[pair[V, B]], B]]&, V, V, B)
