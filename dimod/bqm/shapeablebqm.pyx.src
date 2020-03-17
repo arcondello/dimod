@@ -30,7 +30,7 @@ from cython.operator cimport postincrement as inc, dereference as deref
 
 import numpy as np
 
-from dimod.bqm cimport cyBQM
+from dimod.bqm cimport cyBQM2 as cyBQM
 from dimod.bqm.common cimport NeighborhoodIndex
 from dimod.bqm.common import dtype, itype, ntype
 from dimod.bqm.cppbqm cimport (add_variable,

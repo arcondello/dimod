@@ -22,6 +22,7 @@ import numpy as np
 import dimod
 
 from dimod.bqm cimport cyBQM
+from dimod.bqm cimport cyBQM2  # temp
 from dimod.bqm.common import itype, dtype
 from dimod.bqm.common cimport Bias, VarIndex
 from dimod.bqm.cppbqm cimport degree, get_linear, neighborhood, num_variables
@@ -121,7 +122,7 @@ cdef inline void swap(VarIndex[:] irow, VarIndex[:] icol, Bias[:] qdata,
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def cyenergies(cyBQM bqm, samples_like):
+def cyenergies(cyBQM2 bqm, samples_like):
     """Determine the energies of the given samples.
 
     Args:
@@ -211,7 +212,7 @@ def cyrelabel(cyBQM bqm, mapping, inplace=True):
 
 @cython.boundscheck
 @cython.wraparound
-def ilinear_biases(cyBQM bqm):
+def ilinear_biases(cyBQM2 bqm):
     """Get the linear biases as well as the neighborhood indices."""
 
     cdef Py_ssize_t numvar = num_variables(bqm.adj_)
@@ -240,7 +241,7 @@ def ilinear_biases(cyBQM bqm):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def ineighborhood(cyBQM bqm, VarIndex ui):
+def ineighborhood(cyBQM2 bqm, VarIndex ui):
     """Get the neighborhood (as a struct array) of variable ui.
 
     Note that this function is in terms of the underlying index, NOT the

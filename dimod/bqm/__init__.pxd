@@ -22,6 +22,10 @@ ctypedef fused cyBQM:
     cyAdjMapBQM
     cyAdjVectorBQM
 
+ctypedef fused cyBQM2:  # temporary
+    cyAdjMapBQM
+    cyAdjVectorBQM
+
 ctypedef fused cyShapeableBQM:
     cyAdjMapBQM
     cyAdjVectorBQM

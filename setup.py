@@ -126,6 +126,7 @@ extensions = [Extension("dimod.roof_duality._fix_variables",
                         ['dimod/bqm/adjvectorbqm'+ext],
                         include_dirs=['dimod/bqm/src/'],
                         library_dirs=['dimod/bqm/src/']),
+              Extension("dimod.bqm.temp", ["dimod/bqm/temp"+ext]),
               Extension("dimod.bqm.utils",
                         ['dimod/bqm/utils'+ext]),
               Extension("dimod.bqm.common",
@@ -136,7 +137,7 @@ extensions = [Extension("dimod.roof_duality._fix_variables",
 if USE_CYTHON:
     from Cython.Build import cythonize
     extensions = cythonize(extensions,
-                           # annotate=True,
+                           annotate=True,
                            )
 
 setup(

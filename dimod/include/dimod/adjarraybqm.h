@@ -37,6 +37,7 @@ class AdjArrayBQM {
     using outvars_iterator = typename std::vector<std::pair<V, B>>::iterator;
     using const_outvars_iterator = typename std::vector<std::pair<V, B>>::const_iterator;
 
+    // in the future we'd probably like to make this protected
     std::vector<std::pair<N, B>> invars;
     std::vector<std::pair<V, B>> outvars;
 

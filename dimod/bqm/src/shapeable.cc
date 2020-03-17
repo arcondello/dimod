@@ -12,7 +12,6 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include "src/adjarray.h"
 #include "src/shapeable.h"
 
 #include <algorithm>
@@ -71,7 +70,7 @@ std::pair<typename std::vector<std::pair<VarIndex, Bias>>::const_iterator, bool>
 
     typename std::vector<std::pair<VarIndex, Bias>>::const_iterator it;
     it = std::lower_bound(bqm[u].first.begin(), bqm[u].first.end(),
-                          target, pair_lt<VarIndex, Bias>);
+                          target, cmp_v<VarIndex, Bias>);
 
     return std::make_pair(it, !(it == bqm[u].first.end() || it->first != v));
 }
@@ -88,7 +87,7 @@ std::pair<typename std::vector<std::pair<VarIndex, Bias>>::iterator, bool>
 
     typename std::vector<std::pair<VarIndex, Bias>>::iterator it;
     it = std::lower_bound(bqm[u].first.begin(), bqm[u].first.end(),
-                          target, pair_lt<VarIndex, Bias>);
+                          target, cmp_v<VarIndex, Bias>);
 
     return std::make_pair(it, !(it == bqm[u].first.end() || (*it).first != v));
 }
