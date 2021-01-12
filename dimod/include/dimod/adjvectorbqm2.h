@@ -36,7 +36,9 @@ class AdjVectorBQM2 {
     using const_neighborhood_iterator =
             typename neighborhood_type::const_iterator;
 
-    AdjVectorBQM2() {}
+    bias_type offset;
+
+    AdjVectorBQM2(): offset(0) {}
 
     /**
      * Construct a BQM from a dense array.
@@ -47,7 +49,7 @@ class AdjVectorBQM2 {
      */
     template <class T>
     AdjVectorBQM2(const T dense[], size_type num_variables,
-                  bool ignore_diagonal = false) {
+                  bool ignore_diagonal = false): offset(0) {
         // we know how big our linear is going to be
         adj_.resize(num_variables);
 
@@ -92,7 +94,7 @@ class AdjVectorBQM2 {
      */
     template <class ItRow, class ItCol, class ItBias>
     AdjVectorBQM2(ItRow row_iterator, ItCol col_iterator, ItBias bias_iterator,
-                 size_type length, bool ignore_diagonal = false) {
+                 size_type length, bool ignore_diagonal = false): offset(0) {
         // determine the number of variables so we can allocate adj
         if (length > 0) {
             size_type max_label = std::max(
@@ -204,7 +206,7 @@ class AdjVectorBQM2 {
      */
     template <class Iter>
     bias_type energy(Iter sample_start) {
-        bias_type energy = 0;
+        bias_type energy = offset;
         for (variable_type u = 0; u < num_variables(); ++u) {
             auto u_val = *(sample_start + u);
 

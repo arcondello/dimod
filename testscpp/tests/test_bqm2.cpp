@@ -376,12 +376,13 @@ TEMPLATE_TEST_CASE("Scenario: energies can be calculated", "[bqm]", std::int8_t,
         bqm.linear(3) = 8;
         bqm.set_quadratic(0, 3, -1);
         bqm.set_quadratic(3, 2, 5);
+        bqm.offset = -5;
 
         AND_GIVEN("a sample as an array") {
             TestType sample[5] = {-1, 1, -1, 1, 1};
 
             THEN("the energy can be calculated") {
-                REQUIRE(bqm.energy(&sample[0]) == -.5);
+                REQUIRE(bqm.energy(&sample[0]) == -5.5);
             }
         }
 
@@ -389,7 +390,7 @@ TEMPLATE_TEST_CASE("Scenario: energies can be calculated", "[bqm]", std::int8_t,
             std::vector<TestType> sample{-1, 1, -1, 1, 1};
 
             THEN("the energy can be calculated") {
-                REQUIRE(bqm.energy(&sample[0]) == -.5);
+                REQUIRE(bqm.energy(&sample[0]) == -5.5);
             }
         }
     }
