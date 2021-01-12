@@ -365,4 +365,34 @@ TEMPLATE_TEST_CASE("Scenario: bqms can be constructed from dense arrays",
     }
 }
 
+TEMPLATE_TEST_CASE("Scenario: energies can be calculated", "[bqm]", std::int8_t,
+                   float) {
+    GIVEN("a binary quadratic model") {
+        auto bqm = AdjVectorBQM<float>();
+        bqm.resize(5);
+        bqm.linear(0) = 1.5;
+        bqm.linear(1) = -1;
+        bqm.linear(2) = 2;
+        bqm.linear(3) = 8;
+        bqm.set_quadratic(0, 3, -1);
+        bqm.set_quadratic(3, 2, 5);
+
+        AND_GIVEN("a sample as an array") {
+            TestType sample[5] = {-1, 1, -1, 1, 1};
+
+            THEN("the energy can be calculated") {
+                REQUIRE(bqm.energy(&sample[0]) == -.5);
+            }
+        }
+
+        AND_GIVEN("a sample as a vector") {
+            std::vector<TestType> sample{-1, 1, -1, 1, 1};
+
+            THEN("the energy can be calculated") {
+                REQUIRE(bqm.energy(&sample[0]) == -.5);
+            }
+        }
+    }
+}
+
 }  // namespace dimod

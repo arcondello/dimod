@@ -192,6 +192,37 @@ class AdjVectorBQM2 {
     /// Return the degree of variable `v`
     size_type degree(variable_type v) const { return adj_[v].first.size(); }
 
+    /**
+     * Return the energy of the given sample.
+     *
+     * @param Iter A random access iterator pointing to the beginning of the
+     *     sample.
+     * @return The energy of the given sample.
+     *
+     * The behavior of this function is undefined when the sample is not
+     * <num_variables>"()" long.
+     */
+    template <class Iter>
+    bias_type energy(Iter sample_start) {
+        bias_type energy = 0;
+        for (variable_type u = 0; u < num_variables(); ++u) {
+            auto u_val = *(sample_start + u);
+
+            energy += u_val * linear(u);
+
+            // only look at the lower triangle
+            auto span = neighborhood(u);
+            while (span.first != span.second && span.first->first < u) {
+                variable_type v = span.first->first;
+                auto v_val = *(sample_start + v);
+
+                energy += u_val * v_val * span.first->second;
+
+                ++span.first;
+            }
+        }
+    }
+
     /// Return a reference to the linear bias associated with `v`.
     bias_type& linear(variable_type v) { return adj_[v].second; }
 
