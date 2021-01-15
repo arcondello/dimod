@@ -38,7 +38,10 @@ class AdjVectorBQM2 {
 
     bias_type offset;
 
-    AdjVectorBQM2(): offset(0) {}
+    AdjVectorBQM2() : offset(0) {}
+
+    /// Construct a DQM with n variables.
+    explicit AdjVectorBQM2(size_type n) : AdjVectorBQM2() { resize(n); }
 
     /**
      * Construct a BQM from a dense array.
@@ -49,7 +52,8 @@ class AdjVectorBQM2 {
      */
     template <class T>
     AdjVectorBQM2(const T dense[], size_type num_variables,
-                  bool ignore_diagonal = false): offset(0) {
+                  bool ignore_diagonal = false)
+            : AdjVectorBQM2() {
         // we know how big our linear is going to be
         adj_.resize(num_variables);
 
@@ -94,7 +98,8 @@ class AdjVectorBQM2 {
      */
     template <class ItRow, class ItCol, class ItBias>
     AdjVectorBQM2(ItRow row_iterator, ItCol col_iterator, ItBias bias_iterator,
-                 size_type length, bool ignore_diagonal = false): offset(0) {
+                  size_type length, bool ignore_diagonal = false)
+            : AdjVectorBQM2() {
         // determine the number of variables so we can allocate adj
         if (length > 0) {
             size_type max_label = std::max(

@@ -368,8 +368,7 @@ TEMPLATE_TEST_CASE("Scenario: bqms can be constructed from dense arrays",
 TEMPLATE_TEST_CASE("Scenario: energies can be calculated", "[bqm]", std::int8_t,
                    float) {
     GIVEN("a binary quadratic model") {
-        auto bqm = AdjVectorBQM<float>();
-        bqm.resize(5);
+        auto bqm = AdjVectorBQM<float>(5);
         bqm.linear(0) = 1.5;
         bqm.linear(1) = -1;
         bqm.linear(2) = 2;
