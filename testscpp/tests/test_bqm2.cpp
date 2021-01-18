@@ -395,4 +395,40 @@ TEMPLATE_TEST_CASE("Scenario: energies can be calculated", "[bqm]", std::int8_t,
     }
 }
 
+TEMPLATE_TEST_CASE("Scenario: the vartype can be changed", "[bqm]", std::int8_t,
+                   float) {
+    GIVEN("a binary quadratic model and a sample") {
+        auto bqm = AdjVectorBQM<TestType>(5);
+        bqm.linear(0) = 1;
+        bqm.linear(1) = -3;
+        bqm.linear(2) = 0;
+        bqm.linear(3) = 3;
+        bqm.linear(4) = -4;
+        bqm.set_quadratic(0, 3, -1);
+        bqm.set_quadratic(3, 2, 5);
+        bqm.offset = -3;
+        // todo: quadratic
+
+        std::vector<int> spin_sample{-1, 1, -1, 1, 1};
+        std::vector<int> binary_sample{0, 1, 0, 1, 1};
+
+        WHEN("the vartype is changed from spin to binary") {
+            double spin_energy = bqm.energy(spin_sample);
+            bqm.change_vartype(std::make_pair(-1, 1), std::make_pair(0, 1));
+
+            THEN("the energy is the same for the appropriate sample type") {
+                REQUIRE(bqm.energy(binary_sample) == spin_energy);
+            }
+
+            AND_WHEN("it is changed back") {
+                bqm.change_vartype(std::make_pair(0, 1), std::make_pair(-1, 1));
+
+                THEN("the energy is restored") {
+                    REQUIRE(bqm.energy(spin_sample) == spin_energy);
+                }
+            }
+        }
+    }
+}
+
 }  // namespace dimod

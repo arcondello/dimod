@@ -196,14 +196,53 @@ class AdjVectorBQM2 {
         return adj_.size() - 1;
     }
 
+    // x.first != x.second and y.first != y.second
+    template <class T>
+    void change_vartype(std::pair<T, T> x, std::pair<T, T> y) {
+        // Want x = ay+b
+        T a_numerator = x.first - x.second;
+        T a_denominator = y.first - y.second;
+        T b_numerator = a_denominator * (x.first + x.second) -
+                        a_numerator * (y.first + y.second);
+        T b_denominator = 2 * a_denominator;
+
+        // E(x)
+        // = E(ay+b)
+        // = \sum_i (a y_i + b)
+        //   + \sum_i \sum_{j \in N(i)} (a^2 y_i y_j * aby_j + .5 b^2) J_{i,j}
+        for (auto it = adj_.begin(); it != adj_.end(); ++it) {
+            // b h_i
+            offset += it->second * b_numerator / b_denominator;
+
+            // a y_i h_i
+            it->second *= a_numerator;
+            it->second /= a_denominator;
+
+            for (auto nit = it->first.begin(); nit != it->first.end(); ++nit) {
+                // a b y_i y_j J_{i,j}
+                adj_[nit->first].second += a_numerator * b_numerator *
+                                           nit->second /
+                                           (a_denominator * b_denominator);
+
+                // .5 b^2 y_j J_{i,j}
+                offset += b_numerator * b_numerator * nit->second /
+                          (2 * b_denominator * b_denominator);
+
+                // a^2 J_{i,j}
+                nit->second *= a_numerator * a_numerator;
+                nit->second /= a_denominator * a_denominator;
+            }
+        }
+    }
+
     /// Return the degree of variable `v`
     size_type degree(variable_type v) const { return adj_[v].first.size(); }
 
     /**
      * Return the energy of the given sample.
      *
-     * @param Iter A random access iterator pointing to the beginning of the
-     *     sample.
+     * @param sample_start A random access iterator pointing to the beginning
+     *     of the sample.
      * @return The energy of the given sample.
      *
      * The behavior of this function is undefined when the sample is not
@@ -228,6 +267,20 @@ class AdjVectorBQM2 {
                 ++span.first;
             }
         }
+    }
+
+    /**
+     * Return the energy of the given sample.
+     *
+     * @param sample A vector containing the sample.
+     * @return The energy of the given sample.
+     *
+     * The behavior of this function is undefined when the sample is not
+     * <num_variables>"()" long.
+     */
+    template<class T>
+    bias_type energy(std::vector<T> sample) {
+        return energy(&sample[0]);
     }
 
     /// Return a reference to the linear bias associated with `v`.
