@@ -54,6 +54,7 @@ ctypedef fused cyQM:
 cdef class cyConstrainedQuadraticModel:
     cdef cppConstrainedQuadraticModel[bias_type, index_type] data
 
+    cdef readonly constraint_labels
     cdef readonly object dtype
     cdef readonly object index_dtype
     cdef readonly cyVariables variables

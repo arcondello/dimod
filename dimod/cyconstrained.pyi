@@ -18,16 +18,26 @@ import dimod
 
 
 class cyConstrainedQuadraticModel:
-    def __init__(self) -> None: ...
+    def add_constraint_from_model(self,
+                                  qm: typing.Union[dimod.binary.cybqm.cyBQM_float32,
+                                                   dimod.binary.cybqm.cyBQM_float64,
+                                                   dimod.quadratic.cyqm.cyQM_float32,
+                                                   dimod.quadratic.cyqm.cyQM_float64],
+                                  sense: typing.Union[dimod.sym.Sense, str],
+                                  rhs: dimod.typing.Bias = 0,
+                                  *,
+                                  label: typing.Optional[typing.Hashable] = None,
+                                  copy: bool = True) -> typing.Hashable: ...
 
     def add_variable(self,
                      vartype: dimod.typing.VartypeLike,
                      v: typing.Optional[dimod.typing.Variable],
                      *,
-                     lower_bound: typing.Optional[float],
-                     upper_bound: typing.Optional[float],
+                     lower_bound: typing.Optional[float] = None,
+                     upper_bound: typing.Optional[float] = None,
                      ) -> dimod.typing.Variable: ...
 
+    def lower_bound(self, v: dimod.typing.Variable) -> float: ...
     def set_lower_bound(self, v: dimod.typing.Variable, lb: float) -> None: ...
 
     def set_objective(self,
@@ -37,5 +47,6 @@ class cyConstrainedQuadraticModel:
                                               dimod.quadratic.cyqm.cyQM_float64],
                       ) -> None: ...
 
-    def set_upper_bound(self, v: dimod.typing.Variable, lb: float) -> None: ...
+    def set_upper_bound(self, v: dimod.typing.Variable, ub: float) -> None: ...
+    def upper_bound(self, v: dimod.typing.Variable) -> float: ...
     def vartype(self, v: dimod.typing.Variable) -> dimod.Vartype: ...

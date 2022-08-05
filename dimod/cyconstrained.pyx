@@ -12,18 +12,21 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+import uuid
 import warnings
 
 from cython.operator cimport preincrement as inc, dereference as deref
 
 from libc.math cimport ceil, floor
+from libcpp.unordered_map cimport unordered_map
 
 import numpy as np
 
 import dimod
 
-from dimod.cyutilities cimport cppvartype
+from dimod.cyutilities cimport as_numpy_float, cppvartype
 from dimod.libcpp cimport cppvartype_info
+from dimod.sym import Sense
 from dimod.variables import Variables
 from dimod.vartypes import Vartype, as_vartype, VartypeLike
 
@@ -34,12 +37,37 @@ INDEX_DTYPE = np.int32
 
 cdef class cyConstrainedQuadraticModel:
     def __init__(self):
+        self.constraint_labels = Variables()
         self.dtype = np.dtype(BIAS_DTYPE)
         self.index_dtype = np.dtype(INDEX_DTYPE)
         self.variables = Variables()
 
         self.REAL_INTERACTIONS = dimod.REAL_INTERACTIONS
 
+    def add_constraint_from_model(self, cyQM qm, sense, bias_type rhs = 0, label=None, bint copy=True):
+
+        # get sense as an enum
+        if isinstance(sense, str):
+            sense = Sense(sense)
+
+        if label is None:
+            # we support up to 100k constraints and :6 gives us 16777216
+            # possible so pretty safe
+            label = 'c' + uuid.uuid4().hex[:6]
+            while label in self.constraint_labels:
+                label = 'c' + uuid.uuid4().hex[:6]
+        elif label in self.constraint_labels:
+            raise ValueError("a constraint with that label already exists")
+
+        # we need a mapping from the qm's labels to our global label set
+        cdef unordered_map[index_type, index_type] mapping
+        cdef Py_ssize_t vi
+        for vi in range(qm.variables.size()):
+            v = qm.variables.at(vi)
+            if v in self.variables:
+                mapping[vi] = self.variables.index(v)
+
+        raise NotImplementedError
 
     def add_variable(self, vartype, v=None, *, lower_bound=None, upper_bound=None):
         cdef cppVartype vt = cppvartype(as_vartype(vartype, extended=True))
@@ -105,6 +133,8 @@ cdef class cyConstrainedQuadraticModel:
 
         return self.variables.at(-1)
 
+    def lower_bound(self, v):
+        return as_numpy_float(self.data.lower_bound(self.variables.index(v)))
 
     def set_lower_bound(self, v, bias_type lb):
         cdef Py_ssize_t vi = self.variables.index(v)
@@ -177,6 +207,8 @@ cdef class cyConstrainedQuadraticModel:
         cdef bias_type *b = &(self.data.upper_bound(vi))
         b[0] = ub
 
+    def upper_bound(self, v):
+        return as_numpy_float(self.data.upper_bound(self.variables.index(v)))
 
     def vartype(self, v):
         cdef Py_ssize_t vi = self.variables.index(v)

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <memory>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -77,6 +78,30 @@ class LinearConstraint : public ConstraintBase<Bias, Index> {
     LinearConstraint(std::vector<linear_type>&& terms, Sense sense, bias_type rhs)
             : base_type(sense, rhs), terms_(std::move(terms)) {}
 };
+
+// template <class Bias, class Index>
+// class QuadraticConstraint: public ConstraintBase<Bias, Index> {
+//     /// The type of the base class.
+//     using base_type = ConstraintBase<Bias, Index>;
+
+//     /// The first template parameter (Bias).
+//     using bias_type = Bias;
+
+//     /// The second template parameter (Index).
+//     using index_type = Index;
+
+//     /// Unsigned integral type that can represent non-negative values.
+//     using size_type = std::size_t;
+
+//     using linear_type = LinearTerm<bias_type, index_type>;
+
+//  private:
+//     std::vector<linear_type> terms_;
+//     std::vector<Neighborhood<bias_type, index_type>> adj_;
+
+//  public:
+//     QuadraticConstraint
+// };
 
 template <class Bias, class Index = int>
 class ConstrainedQuadraticModel {
