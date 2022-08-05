@@ -24,13 +24,15 @@ import os.path as path
 
 import numpy as np
 
-from dimod import BQM, Spin, Binary, CQM, Integer
+from dimod import BQM, Spin, Binary, Integer
+# from dimod import CQM
+from dimod.constrained2 import CQM
 from dimod.sym import Sense
 
 
 class TestAddVariable(unittest.TestCase):
     def test_inconsistent_bounds(self):
-        cqm = dimod.CQM()
+        cqm = CQM()
         i = dimod.Integer('i')
         cqm.set_objective(i)
         cqm.set_lower_bound('i', 1)
@@ -41,12 +43,12 @@ class TestAddVariable(unittest.TestCase):
             cqm.add_variable('INTEGER', 'i', upper_bound=6)
 
     def test_return_value(self):
-        cqm = dimod.CQM()
+        cqm = CQM()
         self.assertEqual(cqm.add_variable('INTEGER', 'i'), 'i')
         self.assertEqual(cqm.add_variable('INTEGER', 'i'), 'i')
 
     def test_deprecation(self):
-        cqm = dimod.CQM()
+        cqm = CQM()
         with self.assertWarns(DeprecationWarning):
             cqm.add_variable('a', 'INTEGER')
         with self.assertWarns(DeprecationWarning):
@@ -134,7 +136,7 @@ class TestAddDiscrete(unittest.TestCase):
         self.assertTrue(cqm.constraints[c].lhs.is_equal(qm))
 
     def test_exceptions(self):
-        cqm = dimod.CQM()
+        cqm = CQM()
         x, y, z = dimod.Binaries('xyz')
         with self.subTest("too few variables"):
             with self.assertRaises(ValueError):
@@ -178,7 +180,7 @@ class TestAddDiscrete(unittest.TestCase):
         b2 = dimod.Binary('b2')
         b3 = dimod.Binary('b3')
 
-        cqm = dimod.CQM()
+        cqm = CQM()
         cqm.add_discrete(dimod.quicksum([b1, b2]))
         with self.assertRaises(ValueError):
             cqm.add_discrete(dimod.quicksum([b1, b3]))
@@ -188,7 +190,7 @@ class TestAddDiscrete(unittest.TestCase):
         i, j = dimod.Integers('ij')
         ii = dimod.Binary('i')
 
-        cqm = dimod.CQM()
+        cqm = CQM()
         cqm.add_constraint(i <= 5)
         with self.assertRaises(ValueError):
             cqm.add_discrete(x + y + ii)
@@ -266,7 +268,7 @@ class TestCheckFeasible(unittest.TestCase):
     def test_simple(self):
         x, y, z = dimod.Binaries('xyz')
 
-        cqm = dimod.CQM()
+        cqm = CQM()
         cqm.add_constraint((x + y + z) * 3 <= 3)
 
         self.assertTrue(cqm.check_feasible({'x': 1, 'y': 0, 'z': 0}))
@@ -276,7 +278,7 @@ class TestCheckFeasible(unittest.TestCase):
     def test_tolerance(self):
         x, y, z = dimod.Binaries('xyz')
 
-        cqm = dimod.CQM()
+        cqm = CQM()
         cqm.add_constraint((x + y + z) * 3 * .1 <= .9)
 
         sample = {'x': 1, 'y': 1, 'z': 1}
@@ -432,7 +434,7 @@ class TestFlipVariable(unittest.TestCase):
         i, j = dimod.Integers('ij')
         s, t = dimod.Spins('st')
 
-        cqm = dimod.CQM()
+        cqm = CQM()
         cqm.set_objective(x + y + i + j + s + t)
         cqm.add_constraint(x + i + s <= 5)
 
@@ -446,7 +448,7 @@ class TestFlipVariable(unittest.TestCase):
         i, j = dimod.Integers('ij')
         s, t = dimod.Spins('st')
 
-        cqm = dimod.CQM()
+        cqm = CQM()
         cqm.set_objective(x + y + z + i + j + s + t)
         c = cqm.add_constraint(x + i + s <= 5)
         d = cqm.add_discrete('xyz')
@@ -500,12 +502,12 @@ class TestIsAlmostEqual(unittest.TestCase):
         i, j = dimod.Integers('ij')
         x, y = dimod.Binaries('xy')
 
-        cqm0 = dimod.CQM()
+        cqm0 = CQM()
         cqm0.set_objective(i + 2*j + x*i)
         cqm0.add_constraint(i <= 5, label='a')
         cqm0.add_constraint(y*j >= 4, label='b')
 
-        cqm1 = dimod.CQM()
+        cqm1 = CQM()
         cqm1.set_objective(i + 2.0001*j + x*i)
         cqm1.add_constraint(i <= 5, label='a')
         cqm1.add_constraint(1.001*y*j >= 4, label='b')
@@ -519,12 +521,12 @@ class TestIsEqual(unittest.TestCase):
         i, j = dimod.Integers('ij')
         x, y = dimod.Binaries('xy')
 
-        cqm0 = dimod.CQM()
+        cqm0 = CQM()
         cqm0.set_objective(i + 2*j + x*i)
         cqm0.add_constraint(i <= 5, label='a')
         cqm0.add_constraint(y*j >= 4, label='b')
 
-        cqm1 = dimod.CQM()
+        cqm1 = CQM()
         cqm1.set_objective(i + 2*j + x*i)
         cqm1.add_constraint(i <= 5, label='a')
         cqm1.add_constraint(y*j >= 4, label='b')
@@ -541,11 +543,11 @@ class TestIsEqual(unittest.TestCase):
 
 class TestIsLinear(unittest.TestCase):
     def test_empty(self):
-        cqm = dimod.CQM()
+        cqm = CQM()
         self.assertTrue(cqm.is_linear())
 
     def test_linear(self):
-        cqm = dimod.CQM()
+        cqm = CQM()
 
         x, y = dimod.Binaries('xy')
         i = dimod.Integer('i')
@@ -561,24 +563,24 @@ class TestIsLinear(unittest.TestCase):
         i = dimod.Integer('i')
 
         with self.subTest("objective"):
-            cqm = dimod.CQM()
+            cqm = CQM()
             cqm.set_objective(x*y)
             self.assertFalse(cqm.is_linear())
 
         with self.subTest("bqm constraint"):
-            cqm = dimod.CQM()
+            cqm = CQM()
             cqm.add_constraint(x*y == 5)
             self.assertFalse(cqm.is_linear())
 
         with self.subTest("cqm constraint"):
-            cqm = dimod.CQM()
+            cqm = CQM()
             cqm.add_constraint(x*i >= 5)
             self.assertFalse(cqm.is_linear())
 
 
 class TestCQMtoBQM(unittest.TestCase):
     def test_empty(self):
-        bqm, inverter = dimod.cqm_to_bqm(dimod.CQM())
+        bqm, inverter = dimod.cqm_to_bqm(CQM())
         self.assertEqual(bqm.shape, (0, 0))
         self.assertEqual(bqm.vartype, dimod.BINARY)
 
@@ -755,7 +757,7 @@ class TestNumBiases(unittest.TestCase):
         x, y, z = dimod.Binaries('xyz')
         i, j = dimod.Integers('ij')
 
-        cqm = dimod.CQM()
+        cqm = CQM()
         cqm.set_objective(x + y + z + i + j + i*x)
         cqm.add_constraint(x + y + z + x*y + z*y <= 5)
         cqm.add_constraint(i + x + i*x == 5)
@@ -773,7 +775,7 @@ class TestNumQuadraticVariables(unittest.TestCase):
         x, y, z = dimod.Binaries('xyz')
         i, j = dimod.Integers('ij')
 
-        cqm = dimod.CQM()
+        cqm = CQM()
         cqm.set_objective(x + y + z + i + j + i*x)
         cqm.add_constraint(x + y + z + x*y + z*y <= 5)
         cqm.add_constraint(i + x + i*x == 5)
@@ -802,7 +804,7 @@ class FromQM(unittest.TestCase):
 class TestRelabelConstraints(unittest.TestCase):
     def test_discrete(self):
         x, y = dimod.Binaries('xy')
-        cqm = dimod.CQM()
+        cqm = CQM()
 
         c0 = cqm.add_constraint(x + y - x*y <= 5, label='c0')
         c1 = cqm.add_discrete(x + y == 1, label='c1')
@@ -815,7 +817,7 @@ class TestRelabelConstraints(unittest.TestCase):
 
     def test_superset(self):
         x, y = dimod.Binaries('xy')
-        cqm = dimod.CQM()
+        cqm = CQM()
 
         c0 = cqm.add_constraint(x + y - x*y <= 5, label='c0')
         c1 = cqm.add_discrete(x + y == 1, label='c1')
@@ -824,7 +826,7 @@ class TestRelabelConstraints(unittest.TestCase):
 
     def test_swap(self):
         x, y = dimod.Binaries('xy')
-        cqm = dimod.CQM()
+        cqm = CQM()
 
         c0 = cqm.add_constraint(x + y <= 5)
         c1 = cqm.add_constraint(x*y == 1)
@@ -884,7 +886,7 @@ class TestRemoveConstraint(unittest.TestCase):
 
     def test_simple(self):
         x, y = dimod.Binaries('xy')
-        cqm = dimod.CQM()
+        cqm = CQM()
 
         c0 = cqm.add_constraint(x + y - x*y <= 5, label='c0')
         c1 = cqm.add_discrete(x + y == 1, label='c1')
@@ -1046,7 +1048,7 @@ class TestSetObjective(unittest.TestCase):
             with self.subTest(dtype=np.dtype(dtype).name):
                 bqm = dimod.BQM({'a': 1}, {'ab': 4}, 5, 'BINARY', dtype=dtype)
 
-                cqm = dimod.CQM()
+                cqm = CQM()
 
                 cqm.set_objective(bqm)
 
