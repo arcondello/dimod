@@ -24,7 +24,7 @@ SCENARIO("constrained quadratic models") {
 
         THEN("some basic properties can be discovered") {
             CHECK(cqm.num_variables() == 0);
-            // CHECK(cqm.num_constraints() == 0);
+            CHECK(cqm.num_constraints() == 0);
         }
 
         WHEN("the objective is set via a QM") {
@@ -52,16 +52,26 @@ SCENARIO("constrained quadratic models") {
         }
 
         WHEN("one constraint is copied") {
-            cqm.add_variables(10, Vartype::BINARY);
-            CHECK(cqm.num_variables() == 10);
+            cqm.add_variable(Vartype::INTEGER, -5, 5);
+            cqm.add_variables(9, Vartype::BINARY);
+            REQUIRE(cqm.num_variables() == 10);
 
             std::vector<int> variables {2, 4, 7};
             std::vector<float> biases {20, 40, 70};
 
-            cqm.add_linear_constraint(variables, biases, Sense::Le, 5);
+            auto c0 = cqm.add_linear_constraint(variables, biases, Sense::Le, 5);
 
             REQUIRE(cqm.num_constraints() == 1);
-            // CHECK(cqm.constraint(0).linear(0) == 0);
+            CHECK(cqm.constraint(c0).linear(0) == 0);
+            CHECK(cqm.constraint(c0).linear(2) == 20);
+            CHECK(cqm.constraint(c0).linear(4) == 40);
+            CHECK(cqm.constraint(c0).linear(7) == 70);
+            CHECK(cqm.constraint(c0).lower_bound(0) == -5);
+            CHECK(cqm.constraint(c0).upper_bound(0) == +5);
+            CHECK(cqm.constraint(c0).vartype(0) == Vartype::INTEGER);
+            CHECK(cqm.constraint(c0).lower_bound(2) == 0);
+            CHECK(cqm.constraint(c0).upper_bound(2) == 1);
+            CHECK(cqm.constraint(c0).vartype(2) == Vartype::BINARY);
         }
     }
 }
