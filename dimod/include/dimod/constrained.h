@@ -23,7 +23,7 @@
 
 namespace dimod {
 
-enum Sense { Le, Ge, Eq };
+enum Sense { LE, GE, EQ };
 
 template <class Bias, class Index>
 class ConstrainedQuadraticModel;
@@ -54,6 +54,9 @@ class Constraint : public abc::QuadraticModelBase<Bias, Index> {
     std::unordered_map<index_type, index_type> indices_;
 
  public:
+    Constraint(const parent_type* parent, Sense sense)
+            : base_type(), variables_(), sense_(sense), rhs_(0) {}
+
     Constraint(const parent_type* parent, std::vector<index_type>&& variables,
                std::vector<bias_type>&& biases, Sense sense, bias_type rhs)
             : base_type(std::move(biases)),
@@ -67,9 +70,12 @@ class Constraint : public abc::QuadraticModelBase<Bias, Index> {
         }
     }
 
+    void add_quadratic(index_type u, index_type v, bias_type bias) {
+        base_type::add_quadratic(this->add_variable(u), this->add_variable(v), bias);
+    }
+
     bias_type linear(index_type v) const {
         assert(v >= 0 && static_cast<size_type>(v) < this->parent_->num_variables());
-
         auto it = this->indices_.find(v);
         if (it == this->indices_.end()) {
             return 0;
@@ -82,6 +88,21 @@ class Constraint : public abc::QuadraticModelBase<Bias, Index> {
     bias_type upper_bound(index_type v) const { return this->parent_->upper_bound(v); }
 
     Vartype vartype(index_type v) const { return this->parent_->vartype(v); }
+
+ private:
+    /// Returns the index of v
+    index_type add_variable(index_type v) {
+        assert(v >= 0 && static_cast<size_type>(v) < this->parent_->num_variables());
+        auto it = this->indices_.find(v);
+        if (it == this->indices_.end()) {
+            // we need to add a new variable to the constraint
+            this->variables_.push_back(v);
+            this->indices_.emplace(v, this->variables_.size() - 1);
+            return base_type::add_variable();
+        } else {
+            return it->second;
+        }
+    }
 };
 
 template <class Bias, class Index = int>
@@ -107,7 +128,28 @@ class ConstrainedQuadraticModel {
 
     std::vector<constraint_type> constraints_;
 
+    // should this be public?
+    class ConstraintsView {
+        ConstrainedQuadraticModel<bias_type, index_type>* parent_;
+     public:
+        explicit ConstraintsView(ConstrainedQuadraticModel<bias_type, index_type>* parent)
+                : parent_(parent) {}
+        const constraint_type& operator[](index_type c) const { return parent_->constraints_[c]; }
+        constraint_type& operator[](index_type c) { return parent_->constraints_[c]; }
+        size_type size() const { return parent_->constraints_.size(); }
+    };
+
  public:
+    ConstraintsView constraints;
+
+    ConstrainedQuadraticModel() : constraints(this) {}
+
+    void add_constraints(index_type n, Sense sense) {
+        for (index_type i = 0; i < n; ++i) {
+            this->constraints_.emplace_back(this, sense);
+        }
+    }
+
     index_type add_linear_constraint(std::vector<index_type>&& variables,
                                      std::vector<bias_type>&& biases, Sense sense, bias_type rhs) {
         this->constraints_.emplace_back(this, std::move(variables), std::move(biases), sense, rhs);
@@ -141,9 +183,9 @@ class ConstrainedQuadraticModel {
         }
     }
 
-    constraint_type& constraint(index_type c) { return this->constraints_[c]; }
+    // constraint_type& constraint(index_type c) { return this->constraints_[c]; }
 
-    const constraint_type& constraint(index_type c) const { return this->constraints_[c]; }
+    // const constraint_type& constraint(index_type c) const { return this->constraints_[c]; }
 
     /// Return the lower bound for variable `v`.
     bias_type lower_bound(index_type v) const { return this->objective_.lower_bound(v); }

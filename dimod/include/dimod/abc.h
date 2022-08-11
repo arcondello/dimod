@@ -52,8 +52,44 @@ class QuadraticModelBase {
     explicit QuadraticModelBase(std::vector<bias_type>&& biases)
             : linear_biases_(biases), adj_ptr_(), offset_(0) {}
 
+    index_type add_variable() {
+        this->linear_biases_.push_back(0);
+        if (this->has_quadratic()) {
+            this->adj_ptr_->resize(this->adj_ptr_->size() + 1);
+        }
+        return this->linear_biases_.size() - 1;
+    }
+
  public:
-    // void add_linear(index_type v, bias_type bias) { this->linear_biases_[v] += bias; }
+    void add_quadratic(index_type u, index_type v, bias_type bias) {
+        assert(0 <= u && static_cast<size_t>(u) < this->num_variables());
+        assert(0 <= v && static_cast<size_t>(v) < this->num_variables());
+
+        this->enforce_quadratic();
+
+        // if (u == v) {
+        //     switch (this->vartype(u)) {
+        //         case Vartype::BINARY: {
+        //             // 1*1 == 1 and 0*0 == 0 so this is linear
+        //             this->linear_biases_(u) += bias;
+        //             break;
+        //         }
+        //         case Vartype::SPIN: {
+        //             // -1*-1 == +1*+1 == 1 so this is a constant offset
+        //             this->offset_ += bias;
+        //             break;
+        //         }
+        //         default: {
+        //             // self-loop
+        //             this->adj_[u][v] += bias;
+        //             break;
+        //         }
+        //     }
+        // } else {
+        //     this->adj_[u][v] += bias;
+        //     this->adj_[v][u] += bias;
+        // }
+    }
 
     bias_type linear(index_type v) const { return this->linear_biases_[v]; }
 
@@ -61,11 +97,23 @@ class QuadraticModelBase {
 
     virtual bias_type lower_bound(index_type) const = 0;
 
+    size_type num_variables() const { return this->linear_biases_.size(); }
+
     // void set_linear(index_type v, bias_type bias) { this->linear_biases_[v] = bias; }
 
     virtual bias_type upper_bound(index_type) const = 0;
 
     virtual Vartype vartype(index_type) const = 0;
+
+ private:
+    inline void enforce_quadratic() {
+        if (!this->adj_ptr_) {
+            this->adj_ptr_ = std::unique_ptr<std::vector<Neighborhood<bias_type, index_type>>>(
+                    new std::vector<Neighborhood<bias_type, index_type>>(this->num_variables()));
+        }
+    }
+
+    inline bool has_quadratic() const { return static_cast<bool>(this->adj_ptr_); }
 };
 
 }  // namespace abc

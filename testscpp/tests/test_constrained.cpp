@@ -51,7 +51,7 @@ SCENARIO("constrained quadratic models") {
             CHECK(cqm.objective().upper_bound(1) == qm.upper_bound(1));
         }
 
-        WHEN("one constraint is copied") {
+        WHEN("one constraint is added") {
             cqm.add_variable(Vartype::INTEGER, -5, 5);
             cqm.add_variables(9, Vartype::BINARY);
             REQUIRE(cqm.num_variables() == 10);
@@ -59,19 +59,32 @@ SCENARIO("constrained quadratic models") {
             std::vector<int> variables {2, 4, 7};
             std::vector<float> biases {20, 40, 70};
 
-            auto c0 = cqm.add_linear_constraint(variables, biases, Sense::Le, 5);
+            auto c0 = cqm.add_linear_constraint(variables, biases, Sense::LE, 5);
 
             REQUIRE(cqm.num_constraints() == 1);
-            CHECK(cqm.constraint(c0).linear(0) == 0);
-            CHECK(cqm.constraint(c0).linear(2) == 20);
-            CHECK(cqm.constraint(c0).linear(4) == 40);
-            CHECK(cqm.constraint(c0).linear(7) == 70);
-            CHECK(cqm.constraint(c0).lower_bound(0) == -5);
-            CHECK(cqm.constraint(c0).upper_bound(0) == +5);
-            CHECK(cqm.constraint(c0).vartype(0) == Vartype::INTEGER);
-            CHECK(cqm.constraint(c0).lower_bound(2) == 0);
-            CHECK(cqm.constraint(c0).upper_bound(2) == 1);
-            CHECK(cqm.constraint(c0).vartype(2) == Vartype::BINARY);
+            CHECK(cqm.constraints[c0].linear(0) == 0);
+            CHECK(cqm.constraints[c0].linear(2) == 20);
+            CHECK(cqm.constraints[c0].linear(4) == 40);
+            CHECK(cqm.constraints[c0].linear(7) == 70);
+            CHECK(cqm.constraints[c0].lower_bound(0) == -5);
+            CHECK(cqm.constraints[c0].upper_bound(0) == +5);
+            CHECK(cqm.constraints[c0].vartype(0) == Vartype::INTEGER);
+            CHECK(cqm.constraints[c0].lower_bound(2) == 0);
+            CHECK(cqm.constraints[c0].upper_bound(2) == 1);
+            CHECK(cqm.constraints[c0].vartype(2) == Vartype::BINARY);
+
+            CHECK(cqm.constraints[0].vartype(2) == Vartype::BINARY);
+        }
+
+        WHEN("10 variables and two empty constraints are added") {
+            cqm.add_constraints(2, Sense::EQ);
+            cqm.add_variables(10, Vartype::INTEGER);
+
+            THEN("they can be manipulated") {
+                REQUIRE(cqm.num_constraints() == 2);
+
+                cqm.constraints[0].add_quadratic(0, 1, 1.5);
+            }
         }
     }
 }
