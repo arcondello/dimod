@@ -80,10 +80,16 @@ SCENARIO("constrained quadratic models") {
             cqm.add_constraints(2, Sense::EQ);
             cqm.add_variables(10, Vartype::INTEGER);
 
-            THEN("they can be manipulated") {
+            THEN("quadratic biases can be added") {
                 REQUIRE(cqm.num_constraints() == 2);
 
                 cqm.constraints[0].add_quadratic(0, 1, 1.5);
+
+                CHECK(cqm.constraints[0].num_interactions() == 1);
+                CHECK(cqm.constraints[0].num_interactions(0) == 1);
+                CHECK(cqm.constraints[0].num_interactions(1) == 1);
+                CHECK(cqm.constraints[0].quadratic(0, 1) == 1.5);
+                CHECK(cqm.constraints[0].quadratic(1, 0) == 1.5);
             }
         }
     }

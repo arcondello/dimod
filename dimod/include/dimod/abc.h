@@ -54,7 +54,7 @@ class QuadraticModelBase {
 
     index_type add_variable() {
         this->linear_biases_.push_back(0);
-        if (this->has_quadratic()) {
+        if (this->has_adj()) {
             this->adj_ptr_->resize(this->adj_ptr_->size() + 1);
         }
         return this->linear_biases_.size() - 1;
@@ -65,30 +65,30 @@ class QuadraticModelBase {
         assert(0 <= u && static_cast<size_t>(u) < this->num_variables());
         assert(0 <= v && static_cast<size_t>(v) < this->num_variables());
 
-        this->enforce_quadratic();
+        this->enforce_adj();
 
-        // if (u == v) {
-        //     switch (this->vartype(u)) {
-        //         case Vartype::BINARY: {
-        //             // 1*1 == 1 and 0*0 == 0 so this is linear
-        //             this->linear_biases_(u) += bias;
-        //             break;
-        //         }
-        //         case Vartype::SPIN: {
-        //             // -1*-1 == +1*+1 == 1 so this is a constant offset
-        //             this->offset_ += bias;
-        //             break;
-        //         }
-        //         default: {
-        //             // self-loop
-        //             this->adj_[u][v] += bias;
-        //             break;
-        //         }
-        //     }
-        // } else {
-        //     this->adj_[u][v] += bias;
-        //     this->adj_[v][u] += bias;
-        // }
+        if (u == v) {
+            switch (this->vartype(u)) {
+                case Vartype::BINARY: {
+                    // 1*1 == 1 and 0*0 == 0 so this is linear
+                    this->linear_biases_[u] += bias;
+                    break;
+                }
+                case Vartype::SPIN: {
+                    // -1*-1 == +1*+1 == 1 so this is a constant offset
+                    this->offset_ += bias;
+                    break;
+                }
+                default: {
+                    // self-loop
+                    (*adj_ptr_)[u][v] += bias;
+                    break;
+                }
+            }
+        } else {
+            (*adj_ptr_)[u][v] += bias;
+            (*adj_ptr_)[v][u] += bias;
+        }
     }
 
     bias_type linear(index_type v) const { return this->linear_biases_[v]; }
@@ -97,7 +97,48 @@ class QuadraticModelBase {
 
     virtual bias_type lower_bound(index_type) const = 0;
 
+    size_type num_interactions() const {
+        size_type count = 0;
+        if (this->has_adj()) {
+            index_type v = 0;
+            for (auto& n : *(this->adj_ptr_)) {
+                count += n.size();
+
+                // account for self-loops
+                auto lb = n.lower_bound(v);
+                if (lb != n.cend() && lb->first == v) {
+                    count += 1;
+                }
+
+                ++v;
+            }
+        }
+        return count / 2;
+    }
+
+    size_type num_interactions(index_type v) const {
+        if (this->has_adj()) {
+            return (*adj_ptr_)[v].size();
+        } else {
+            return 0;
+        }
+    }
+
     size_type num_variables() const { return this->linear_biases_.size(); }
+
+    bias_type quadratic(index_type u, index_type v) const {
+        if (!adj_ptr_) {
+            return 0;
+        }
+        return (*adj_ptr_)[u].get(v);
+    }
+
+    bias_type quadratic_at(index_type u, index_type v) const {
+        if (!adj_ptr_) {
+            return 0;
+        }
+        return (*adj_ptr_)[u].at(v);
+    }
 
     // void set_linear(index_type v, bias_type bias) { this->linear_biases_[v] = bias; }
 
@@ -106,14 +147,14 @@ class QuadraticModelBase {
     virtual Vartype vartype(index_type) const = 0;
 
  private:
-    inline void enforce_quadratic() {
+    inline void enforce_adj() {
         if (!this->adj_ptr_) {
             this->adj_ptr_ = std::unique_ptr<std::vector<Neighborhood<bias_type, index_type>>>(
                     new std::vector<Neighborhood<bias_type, index_type>>(this->num_variables()));
         }
     }
 
-    inline bool has_quadratic() const { return static_cast<bool>(this->adj_ptr_); }
+    inline bool has_adj() const { return static_cast<bool>(this->adj_ptr_); }
 };
 
 }  // namespace abc
