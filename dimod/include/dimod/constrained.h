@@ -70,6 +70,14 @@ class Constraint : public abc::QuadraticModelBase<Bias, Index> {
         }
     }
 
+    Constraint(const parent_type* parent, const Constraint& constraint)
+            : base_type(constraint),
+              parent_(parent),
+              variables_(constraint.variables_),
+              sense_(constraint.sense_),
+              rhs_(constraint.rhs_),
+              indices_(constraint.indices_) {}
+
     void add_quadratic(index_type u, index_type v, bias_type bias) {
         base_type::add_quadratic(this->add_variable(u), this->add_variable(v), bias);
     }
@@ -84,6 +92,10 @@ class Constraint : public abc::QuadraticModelBase<Bias, Index> {
     }
 
     bias_type lower_bound(index_type v) const { return this->parent_->lower_bound(v); }
+
+    bias_type rhs() const { return this->rhs_; }
+
+    Sense sense() const { return this->sense_; }
 
     bias_type upper_bound(index_type v) const { return this->parent_->upper_bound(v); }
 
@@ -131,11 +143,15 @@ class ConstrainedQuadraticModel {
     // should this be public?
     class ConstraintsView {
         ConstrainedQuadraticModel<bias_type, index_type>* parent_;
+
      public:
         explicit ConstraintsView(ConstrainedQuadraticModel<bias_type, index_type>* parent)
                 : parent_(parent) {}
         const constraint_type& operator[](index_type c) const { return parent_->constraints_[c]; }
         constraint_type& operator[](index_type c) { return parent_->constraints_[c]; }
+
+        typename std::vector<constraint_type>::iterator begin() { return parent_->constraints_.begin(); }
+        typename std::vector<constraint_type>::iterator end() { return parent_->constraints_.end(); }
         size_type size() const { return parent_->constraints_.size(); }
     };
 
@@ -143,6 +159,18 @@ class ConstrainedQuadraticModel {
     ConstraintsView constraints;
 
     ConstrainedQuadraticModel() : constraints(this) {}
+
+    /// Copy constructor.
+    ConstrainedQuadraticModel(const ConstrainedQuadraticModel& cqm)
+            : objective_(cqm.objective_), constraints(this) {
+        // for the constraints, we copy them one-by-one so we can make sure
+        // their pointers are pointing to the right place
+        for (const auto& c : cqm.constraints_) {
+            this->constraints_.emplace_back(this, c);
+        }
+    }
+
+    // ~ConstrainedQuadraticModel() = default;
 
     void add_constraints(index_type n, Sense sense) {
         for (index_type i = 0; i < n; ++i) {

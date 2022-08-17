@@ -49,6 +49,15 @@ class QuadraticModelBase {
     // virtual ~QuadraticModelBase() {}
 
  protected:
+    /// Copy constructor
+    QuadraticModelBase(const QuadraticModelBase& qm)
+            : linear_biases_(qm.linear_biases_), adj_ptr_(), offset_(qm.offset_) {
+        // need to handle the adj if present
+        if (!qm.is_linear()) {
+            throw std::logic_error("todo 56");
+        }
+    }
+
     explicit QuadraticModelBase(std::vector<bias_type>&& biases)
             : linear_biases_(biases), adj_ptr_(), offset_(0) {}
 
@@ -89,6 +98,15 @@ class QuadraticModelBase {
             (*adj_ptr_)[u][v] += bias;
             (*adj_ptr_)[v][u] += bias;
         }
+    }
+
+    bool is_linear() const {
+        if (this->has_adj()) {
+            for (const auto& n : *adj_ptr_) {
+                if (n.size()) return false;
+            }
+        }
+        return true;
     }
 
     bias_type linear(index_type v) const { return this->linear_biases_[v]; }

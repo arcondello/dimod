@@ -13,8 +13,8 @@
 //    limitations under the License.
 
 #include "../Catch2/single_include/catch2/catch.hpp"
-#include "dimod/constrained.h"
 
+#include "dimod/constrained.h"
 
 namespace dimod {
 
@@ -25,6 +25,10 @@ SCENARIO("constrained quadratic models") {
         THEN("some basic properties can be discovered") {
             CHECK(cqm.num_variables() == 0);
             CHECK(cqm.num_constraints() == 0);
+        }
+
+        THEN("the cqm can be copied") {
+            auto cqm2 = cqm;
         }
 
         WHEN("the objective is set via a QM") {

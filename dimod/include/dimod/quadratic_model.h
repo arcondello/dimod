@@ -1143,6 +1143,8 @@ class QuadraticModel : public QuadraticModelBase<Bias, Index> {
 
     QuadraticModel() : base_type(), varinfo_() {}
 
+    QuadraticModel(const QuadraticModel<bias_type, index_type>& qm) = default;
+
     template <class B, class T>
     explicit QuadraticModel(const BinaryQuadraticModel<B, T>& bqm) : base_type(bqm) {
         assert(bqm.vartype() == Vartype::BINARY || bqm.vartype() == Vartype::SPIN);
