@@ -78,6 +78,20 @@ class Constraint : public abc::QuadraticModelBase<Bias, Index> {
               rhs_(constraint.rhs_),
               indices_(constraint.indices_) {}
 
+    Constraint(Constraint&& other) noexcept { *this = std::move(other); }
+
+    Constraint& operator=(Constraint&& other) noexcept {
+        if (this != &other) {
+            base_type::operator=(std::move(other));
+            this->parent_ = other.parent_;
+            this->variables_ = std::move(other.variables_);
+            this->sense_ = other.sense_;
+            this->rhs_ = other.rhs_;
+            this->indices_ = std::move(other.indices_);
+        }
+        return *this;
+    }
+
     void add_quadratic(index_type u, index_type v, bias_type bias) {
         base_type::add_quadratic(this->add_variable(u), this->add_variable(v), bias);
     }
@@ -98,6 +112,8 @@ class Constraint : public abc::QuadraticModelBase<Bias, Index> {
     Sense sense() const { return this->sense_; }
 
     bias_type upper_bound(index_type v) const { return this->parent_->upper_bound(v); }
+
+    index_type variable(index_type vi) const { return this->variables_[vi]; }
 
     Vartype vartype(index_type v) const { return this->parent_->vartype(v); }
 
@@ -227,6 +243,12 @@ class ConstrainedQuadraticModel {
 
     /// Return the upper bound for variable `v`.
     bias_type upper_bound(index_type v) const { return this->objective_.upper_bound(v); }
+
+    void remove_constraint(index_type i) { this->constraints_.erase(this->constraints_.begin() + i); }
+
+    void set_lower_bound(index_type v, bias_type bound) { this->objective_.lower_bound(v) = bound; }
+    void set_upper_bound(index_type v, bias_type bound) { this->objective_.upper_bound(v) = bound; }
+
 
     template <class B, class I>
     void set_objective(const QuadraticModelBase<B, I>& objective) {

@@ -87,6 +87,12 @@ SCENARIO("constrained quadratic models can be presolved") {
             auto presolver = presolve::PreSolver<double>(cqm);
             presolver.add_presolver<presolve::techniques::TrivialPresolver<double>>();
             presolver.apply();
+
+            THEN("several constraints/variables are removed") {
+                const auto& newcqm = presolver.model();
+
+                CHECK(newcqm.num_constraints() == 0);
+            }
         }
     }
 }

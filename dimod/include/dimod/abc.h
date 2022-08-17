@@ -15,6 +15,7 @@
 #pragma once
 
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "dimod/quadratic_model.h"  // Neighborhood
@@ -44,11 +45,6 @@ class QuadraticModelBase {
  public:
     QuadraticModelBase() : linear_biases_(), adj_ptr_(), offset_(0) {}
 
-    // QuadraticModelBase()
-
-    // virtual ~QuadraticModelBase() {}
-
- protected:
     /// Copy constructor
     QuadraticModelBase(const QuadraticModelBase& qm)
             : linear_biases_(qm.linear_biases_), adj_ptr_(), offset_(qm.offset_) {
@@ -58,6 +54,25 @@ class QuadraticModelBase {
         }
     }
 
+    /// Move constructor
+    QuadraticModelBase(QuadraticModelBase&& other) noexcept { *this = std::move(other); }
+
+    /// Move assignment operator
+    QuadraticModelBase& operator=(QuadraticModelBase&& other) noexcept {
+        if (this != &other) {
+            this->linear_biases_ = std::move(other.linear_biases_);
+            this->adj_ptr_ = std::move(other.adj_ptr_);
+            this->offset_ = other.offset_;
+        }
+        return *this;
+    }
+
+
+    // QuadraticModelBase()
+
+    // virtual ~QuadraticModelBase() {}
+
+ protected:
     explicit QuadraticModelBase(std::vector<bias_type>&& biases)
             : linear_biases_(biases), adj_ptr_(), offset_(0) {}
 
@@ -143,6 +158,8 @@ class QuadraticModelBase {
     }
 
     size_type num_variables() const { return this->linear_biases_.size(); }
+
+    bias_type offset() const { return this->offset_; }
 
     bias_type quadratic(index_type u, index_type v) const {
         if (!adj_ptr_) {

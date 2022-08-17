@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -23,11 +24,23 @@
 namespace dimod {
 namespace presolve {
 
+enum Status { FEASIBLE, INFEASIBLE, UNBOUNDED };
+
 template <class Bias, class Index>
 class PreSolveBase;
 
 template <class Bias, class Index>
-class PostSolver;
+class PostSolver {
+ public:
+    /// The first template parameter (Bias).
+    using bias_type = Bias;
+
+    /// The second template parameter (Index).
+    using index_type = Index;
+
+    /// Unsigned integral type that can represent non-negative values.
+    using size_type = std::size_t;
+};
 
 template <class Bias, class Index = int>
 class PreSolver {
@@ -48,6 +61,8 @@ class PreSolver {
 
     std::vector<std::unique_ptr<PreSolveBase<bias_type, index_type>>> presolvers_;
 
+    PostSolver<bias_type, index_type> postsolver_;
+
  public:
     template <class B, class I>
     explicit PreSolver(const ConstrainedQuadraticModel<B, I>& cqm) : model_(cqm) {}
@@ -66,12 +81,45 @@ class PreSolver {
         }
     }
 
-    size_type remove_trivial_variable_constraints() {
+    // Remove any constraints with 0 or 1 variables.
+    size_type remove_trivial_constraints() {
         size_type original_size = this->model_.num_constraints();
 
-        index_type i = 0;
+        size_type i = 0;
         while (i < this->model_.num_constraints()) {
-            ++i;
+            auto& c = this->model_.constraints[i];
+
+            if (c.num_variables() == 0) {
+                // remove after checking feasibity
+                throw std::logic_error("hello 78");
+            } else if (c.num_variables() == 1) {
+                index_type v = c.variable(0);
+
+                // a * x + b ◯ c
+                bias_type a = c.linear(v);
+                if (!a) {
+                    throw std::logic_error("hello 98");
+                }
+                bias_type rhs = (c.rhs() - c.offset()) / a;
+
+                switch (c.sense()) {
+                    case Sense::EQ:
+                        this->model_.set_lower_bound(v, std::max(rhs, this->model_.lower_bound(v)));
+                        this->model_.set_upper_bound(v, std::min(rhs, this->model_.upper_bound(v)));
+                        break;
+                    case Sense::LE:
+                        this->model_.set_upper_bound(v, std::min(rhs, this->model_.upper_bound(v)));
+                        break;
+                    case Sense::GE:
+                        this->model_.set_lower_bound(v, std::max(rhs, this->model_.lower_bound(v)));
+                        break;
+                }
+
+                this->model_.remove_constraint(i);
+            } else {
+                // advance
+                ++i;
+            }
         }
 
         return original_size - this->model_.num_constraints();
@@ -112,7 +160,7 @@ class TrivialPresolver : public PreSolveBase<Bias, Index> {
     void apply(PreSolver<bias_type, index_type>* presolver) {
         // any constraints of the form a*x <= b can just be removed
 
-        presolver->remove_trivial_variable_constraints();
+        presolver->remove_trivial_constraints();
     }
 };
 }  // namespace techniques
