@@ -56,12 +56,14 @@ class PreSolver {
 
     using model_type = ConstrainedQuadraticModel<bias_type, index_type>;
 
+    using postsolver_type = PostSolver<bias_type, index_type>;
+
  private:
     model_type model_;
 
     std::vector<std::unique_ptr<PreSolveBase<bias_type, index_type>>> presolvers_;
 
-    PostSolver<bias_type, index_type> postsolver_;
+    postsolver_type postsolver_;
 
  public:
     template <class B, class I>
@@ -79,6 +81,11 @@ class PreSolver {
         for (auto&& presolver : this->presolvers_) {
             presolver->apply(this);
         }
+    }
+
+    /// Remove any variables where the upper and lower bounds are the same
+    size_type remove_fixed_variables() {
+        return 0;
     }
 
     // Remove any constraints with 0 or 1 variables.
@@ -126,6 +133,8 @@ class PreSolver {
     }
 
     const model_type& model() const { return this->model_; }
+
+    const postsolver_type& postsolver() const { return this->postsolver_; }
 };
 
 template <class Bias, class Index>
@@ -159,8 +168,7 @@ class TrivialPresolver : public PreSolveBase<Bias, Index> {
 
     void apply(PreSolver<bias_type, index_type>* presolver) {
         // any constraints of the form a*x <= b can just be removed
-
-        presolver->remove_trivial_constraints();
+        while (presolver->remove_trivial_constraints() || presolver->remove_fixed_variables()) {}
     }
 };
 }  // namespace techniques

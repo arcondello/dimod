@@ -90,8 +90,11 @@ SCENARIO("constrained quadratic models can be presolved") {
 
             THEN("several constraints/variables are removed") {
                 const auto& newcqm = presolver.model();
+                // const auto& postsolver = presolver.postsolver();
 
                 CHECK(newcqm.num_constraints() == 0);
+
+                CHECK(newcqm.num_variables() == 1);
             }
         }
     }
