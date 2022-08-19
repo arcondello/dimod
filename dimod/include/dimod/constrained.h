@@ -20,6 +20,7 @@
 
 #include "dimod/abc.h"
 #include "dimod/quadratic_model.h"
+#include "dimod/vartypes.h"
 
 namespace dimod {
 
@@ -215,6 +216,7 @@ class ConstrainedQuadraticModel {
         return this->objective_.add_variable(vartype, lb, ub);
     }
 
+    // todo: swap order, return type
     void add_variables(index_type n, Vartype vartype) {
         for (index_type i = 0; i < n; ++i) {
             this->objective_.add_variable(vartype);

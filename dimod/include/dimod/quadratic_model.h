@@ -21,317 +21,13 @@
 #include <utility>
 #include <vector>
 
+#include "dimod/abc.h"
 #include "dimod/iterators.h"
+#include "dimod/neighborhood.h"
 #include "dimod/utils.h"
+#include "dimod/vartypes.h"
 
 namespace dimod {
-
-/// Encode the domain of a variable.
-enum Vartype {
-    BINARY,   ///< Variables that are either 0 or 1.
-    SPIN,     ///< Variables that are either -1 or 1.
-    INTEGER,  ///< Variables that are integer valued.
-    REAL      ///< Variables that are real valued.
-};
-
-/// Compile-time limits by variable type.
-template <class Bias, Vartype vartype>
-class vartype_limits {};
-
-template <class Bias>
-class vartype_limits<Bias, Vartype::BINARY> {
- public:
-    static constexpr Bias default_max() noexcept { return 1; }
-    static constexpr Bias default_min() noexcept { return 0; }
-    static constexpr Bias max() noexcept { return 1; }
-    static constexpr Bias min() noexcept { return 0; }
-};
-
-template <class Bias>
-class vartype_limits<Bias, Vartype::SPIN> {
- public:
-    static constexpr Bias default_max() noexcept { return 1; }
-    static constexpr Bias default_min() noexcept { return -1; }
-    static constexpr Bias max() noexcept { return +1; }
-    static constexpr Bias min() noexcept { return -1; }
-};
-
-template <class Bias>
-class vartype_limits<Bias, Vartype::INTEGER> {
- public:
-    static constexpr Bias default_max() noexcept { return max(); }
-    static constexpr Bias default_min() noexcept { return 0; }
-    static constexpr Bias max() noexcept {
-        return ((std::int64_t)1 << (std::numeric_limits<Bias>::digits)) - 1;
-    }
-    static constexpr Bias min() noexcept { return -max(); }
-};
-template <class Bias>
-class vartype_limits<Bias, Vartype::REAL> {
- public:
-    static constexpr Bias default_max() noexcept { return max(); }
-    static constexpr Bias default_min() noexcept { return 0; }
-    static constexpr Bias max() noexcept { return 1e30; }
-    static constexpr Bias min() noexcept { return -1e30; }
-};
-
-/// Runtime limits by variable type.
-template <class Bias>
-class vartype_info {
- public:
-    static Bias default_max(Vartype vartype) {
-        if (vartype == Vartype::BINARY) {
-            return vartype_limits<Bias, Vartype::BINARY>::default_max();
-        } else if (vartype == Vartype::SPIN) {
-            return vartype_limits<Bias, Vartype::SPIN>::default_max();
-        } else if (vartype == Vartype::INTEGER) {
-            return vartype_limits<Bias, Vartype::INTEGER>::default_max();
-        } else if (vartype == Vartype::REAL) {
-            return vartype_limits<Bias, Vartype::REAL>::default_max();
-        } else {
-            throw std::logic_error("unknown vartype");
-        }
-    }
-    static Bias default_min(Vartype vartype) {
-        if (vartype == Vartype::BINARY) {
-            return vartype_limits<Bias, Vartype::BINARY>::default_min();
-        } else if (vartype == Vartype::SPIN) {
-            return vartype_limits<Bias, Vartype::SPIN>::default_min();
-        } else if (vartype == Vartype::INTEGER) {
-            return vartype_limits<Bias, Vartype::INTEGER>::default_min();
-        } else if (vartype == Vartype::REAL) {
-            return vartype_limits<Bias, Vartype::REAL>::default_min();
-        } else {
-            throw std::logic_error("unknown vartype");
-        }
-    }
-    static Bias max(Vartype vartype) {
-        if (vartype == Vartype::BINARY) {
-            return vartype_limits<Bias, Vartype::BINARY>::max();
-        } else if (vartype == Vartype::SPIN) {
-            return vartype_limits<Bias, Vartype::SPIN>::max();
-        } else if (vartype == Vartype::INTEGER) {
-            return vartype_limits<Bias, Vartype::INTEGER>::max();
-        } else if (vartype == Vartype::REAL) {
-            return vartype_limits<Bias, Vartype::REAL>::max();
-        } else {
-            throw std::logic_error("unknown vartype");
-        }
-    }
-    static Bias min(Vartype vartype) {
-        if (vartype == Vartype::BINARY) {
-            return vartype_limits<Bias, Vartype::BINARY>::min();
-        } else if (vartype == Vartype::SPIN) {
-            return vartype_limits<Bias, Vartype::SPIN>::min();
-        } else if (vartype == Vartype::INTEGER) {
-            return vartype_limits<Bias, Vartype::INTEGER>::min();
-        } else if (vartype == Vartype::REAL) {
-            return vartype_limits<Bias, Vartype::REAL>::min();
-        } else {
-            throw std::logic_error("unknown vartype");
-        }
-    }
-};
-
-/**
- * Used internally by QuadraticModelBase to sparsely encode the neighborhood of
- * a variable.
- *
- * Internally, Neighborhoods keep two vectors, one of neighbors and the other
- * of biases. Neighborhoods are designed to make access more like a standard
- * library map.
- */
-template <class Bias, class Index>
-class Neighborhood {
- public:
-    /// The first template parameter (Bias).
-    using bias_type = Bias;
-
-    /// The second template parameter (Index).
-    using index_type = Index;
-
-    /// Unsigned integral type that can represent non-negative values.
-    using size_type = std::size_t;
-
-    /// Exactly `pair<index_type, bias_type>`.
-    using value_type = typename std::pair<index_type, bias_type>;
-
-    /// A random access iterator to `pair<index_type, bias_type>`.
-    using iterator = typename std::vector<value_type>::iterator;
-
-    /// A random access iterator to `const pair<index_type, bias_type>.`
-    using const_iterator = typename std::vector<value_type>::const_iterator;
-
-    /**
-     * Return a reference to the bias associated with `v`.
-     *
-     * This function automatically checks whether `v` is a variable in the
-     * neighborhood and throws a `std::out_of_range` exception if it is not.
-     */
-    bias_type at(index_type v) const {
-        auto it = this->lower_bound(v);
-        if (it != this->cend() && it->first == v) {
-            // it exists
-            return it->second;
-        } else {
-            // it doesn't exist
-            throw std::out_of_range("given variable has no interaction");
-        }
-    }
-
-    value_type& back() { return this->neighborhood_.back(); }
-
-    const value_type& back() const { return this->neighborhood_.back(); }
-
-    /// Returns an iterator to the beginning.
-    iterator begin() { return this->neighborhood_.begin(); }
-
-    /// Returns an iterator to the end.
-    iterator end() { return this->neighborhood_.end(); }
-
-    /// Returns a const_iterator to the beginning.
-    const_iterator cbegin() const { return this->neighborhood_.cbegin(); }
-
-    /// Returns a const_iterator to the end.
-    const_iterator cend() const { return this->neighborhood_.cend(); }
-
-    /**
-     * Insert a neighbor, bias pair at the end of the neighborhood.
-     *
-     * Note that this does not keep the neighborhood self-consistent and should
-     * only be used when you know that the neighbor is greater than the current
-     * last element.
-     */
-    void emplace_back(index_type v, bias_type bias) { this->neighborhood_.emplace_back(v, bias); }
-
-    /// Returns whether the neighborhood is empty
-    bool empty() const { return !this->size(); }
-
-    /**
-     * Erase an element from the neighborhood.
-     *
-     * Returns the number of element removed, either 0 or 1.
-     */
-    size_type erase(index_type v) {
-        auto it = this->lower_bound(v);
-        if (it != this->end() && it->first == v) {
-            // is there to erase
-            this->neighborhood_.erase(it);
-            return 1;
-        } else {
-            return 0;
-        }
-    }
-
-    /// Erase elements from the neighborhood.
-    void erase(iterator first, iterator last) { this->neighborhood_.erase(first, last); }
-
-    /// Return an iterator to the first element that does not come before `v`.
-    iterator lower_bound(index_type v) {
-        return std::lower_bound(this->begin(), this->end(), v, this->cmp);
-    }
-
-    /// Return an iterator to the first element that does not come before `v`.
-    const_iterator lower_bound(index_type v) const {
-        return std::lower_bound(this->cbegin(), this->cend(), v, this->cmp);
-    }
-
-    /**
-     * Total bytes consumed by the biases and indices.
-     *
-     * If `capacity` is true, use the capacity of the underlying vectors rather
-     * than the size.
-     */
-    size_type nbytes(bool capacity = false) const noexcept {
-        // so there is no guaruntee that the compiler will not implement
-        // pair as pointers or whatever, but this seems like a reasonable
-        // assumption.
-        if (capacity) {
-            return this->neighborhood_.capacity() * sizeof(std::pair<index_type, bias_type>);
-        } else {
-            return this->neighborhood_.size() * sizeof(std::pair<index_type, bias_type>);
-        }
-    }
-
-    /**
-     * Return the bias at neighbor `v` or the default value.
-     *
-     * Return the bias of `v` if `v` is in the neighborhood, otherwise return
-     * the `value` provided without inserting `v`.
-     */
-    bias_type get(index_type v, bias_type value = 0) const {
-        auto it = this->lower_bound(v);
-
-        if (it != this->cend() && it->first == v) {
-            // it exists
-            return it->second;
-        } else {
-            // it doesn't exist
-            return value;
-        }
-    }
-
-    /// Request that the neighborhood capacity be at least enough to contain `n`
-    /// elements.
-    void reserve(index_type n) { this->neighborhood_.reserve(n); }
-
-    /// Return the size of the neighborhood.
-    size_type size() const { return this->neighborhood_.size(); }
-
-    /// Sort the neighborhood and sum the biases of duplicate variables.
-    void sort_and_sum() {
-        if (!std::is_sorted(this->begin(), this->end())) {
-            std::sort(this->begin(), this->end());
-        }
-
-        // now remove any duplicates, summing the biases of duplicates
-        size_type i = 0;
-        size_type j = 1;
-
-        // walk quickly through the neighborhood until we find a duplicate
-        while (j < this->neighborhood_.size() &&
-               this->neighborhood_[i].first != this->neighborhood_[j].first) {
-            ++i;
-            ++j;
-        }
-
-        // if we found one, move into de-duplication
-        while (j < this->neighborhood_.size()) {
-            if (this->neighborhood_[i].first == this->neighborhood_[j].first) {
-                this->neighborhood_[i].second += this->neighborhood_[j].second;
-                ++j;
-            } else {
-                ++i;
-                this->neighborhood_[i] = this->neighborhood_[j];
-                ++j;
-            }
-        }
-
-        // finally resize to contain only the unique values
-        this->neighborhood_.resize(i + 1);
-    }
-
-    /**
-     * Access the bias of `v`.
-     *
-     * If `v` is in the neighborhood, the function returns a reference to
-     * its bias. If `v` is not in the neighborhood, it is inserted and a
-     * reference is returned to its bias.
-     */
-    bias_type& operator[](index_type v) {
-        auto it = this->lower_bound(v);
-        if (it == this->end() || it->first != v) {
-            // it doesn't exist so insert
-            it = this->neighborhood_.emplace(it, v, 0);
-        }
-        return it->second;
-    }
-
- protected:
-    std::vector<value_type> neighborhood_;
-
-    static inline bool cmp(value_type ub, index_type v) { return ub.first < v; }
-};
 
 template <class Bias, class Index = int>
 class QuadraticModelBase {
@@ -793,23 +489,19 @@ class QuadraticModelBase {
     friend class ConstQuadraticIterator<Bias, Index>;
 };
 
-/**
- * A Binary Quadratic Model is a quadratic polynomial over binary variables.
- *
- * Internally, BQMs are stored in a vector-of-vectors adjacency format.
- *
- */
+
+/// A Binary Quadratic Model is a quadratic polynomial over binary variables.
 template <class Bias, class Index = int>
-class BinaryQuadraticModel : public QuadraticModelBase<Bias, Index> {
+class BinaryQuadraticModel : public abc::QuadraticModelBase<Bias, Index> {
  public:
     /// The type of the base class.
-    using base_type = QuadraticModelBase<Bias, Index>;
+    using base_type = abc::QuadraticModelBase<Bias, Index>;
 
     /// The first template parameter (Bias).
     using bias_type = typename base_type::bias_type;
 
     /// The second template parameter (Index).
-    using index_type = Index;
+    using index_type = typename base_type::index_type;
 
     /// Unsigned integral that can represent non-negative values.
     using size_type = typename base_type::size_type;
@@ -818,303 +510,348 @@ class BinaryQuadraticModel : public QuadraticModelBase<Bias, Index> {
     BinaryQuadraticModel() : BinaryQuadraticModel(Vartype::BINARY) {}
 
     /// Create a BQM of the given `vartype`.
-    explicit BinaryQuadraticModel(Vartype vartype)
-            : base_type(),
-              vartype_(vartype),
-              lower_bound_(vartype_info<bias_type>::default_min(vartype)),
-              upper_bound_(vartype_info<bias_type>::default_max(vartype)) {}
+    explicit BinaryQuadraticModel(Vartype vartype): base_type(), vartype_(vartype) {}
 
-    /// Create a BQM with `n` variables of the given `vartype`.
-    BinaryQuadraticModel(index_type n, Vartype vartype) : BinaryQuadraticModel(vartype) {
-        this->resize(n);
+    BinaryQuadraticModel(index_type n, Vartype vartype): base_type(n), vartype_(vartype) {}
+
+    template<class B, class I>
+    bool is_equal(const BinaryQuadraticModel<B, I>& other) const {
+        return this->vartype_ == other.vartype_ && base_type::is_equal(other);
     }
 
-    /**
-     * Create a BQM from a dense matrix.
-     *
-     * `dense` must be an array of length `num_variables^2`.
-     *
-     * Values on the diagonal are treated differently depending on the variable
-     * type.
-     * If the BQM is SPIN-valued, then the values on the diagonal are
-     * added to the offset.
-     * If the BQM is BINARY-valued, then the values on the diagonal are added
-     * as linear biases.
-     *
-     */
-    template <class T>
-    BinaryQuadraticModel(const T dense[], index_type num_variables, Vartype vartype)
-            : BinaryQuadraticModel(num_variables, vartype) {
-        add_quadratic(dense, num_variables);
-    }
+    bias_type lower_bound() const { return vartype_info<bias_type>::min(this->vartype_); }
 
-    /**
-     * Add the variables, interactions and biases from another BQM.
-     *
-     * The size of the updated BQM will be adjusted appropriately.
-     *
-     * If the other BQM does not have the same vartype, the biases are adjusted
-     * accordingly.
-     */
-    template <class B, class I>
-    void add_bqm(const BinaryQuadraticModel<B, I>& bqm) {
-        if (bqm.vartype() != this->vartype()) {
-            // we could do this without the copy, but for now let's just do
-            // it simply
-            auto bqm_copy = BinaryQuadraticModel<B, I>(bqm);
-            bqm_copy.change_vartype(vartype());
-            this->add_bqm(bqm_copy);
-            return;
-        }
+    bias_type lower_bound(index_type v) const { return vartype_info<bias_type>::min(this->vartype_); }
 
-        // make sure we're big enough
-        if (bqm.num_variables() > this->num_variables()) {
-            this->resize(bqm.num_variables());
-        }
+    bias_type upper_bound() const { return vartype_info<bias_type>::max(this->vartype_); }
 
-        // offset
-        this->offset() += bqm.offset();
+    bias_type upper_bound(index_type v) const { return vartype_info<bias_type>::max(this->vartype_); }
 
-        // linear
-        for (size_type v = 0; v < bqm.num_variables(); ++v) {
-            base_type::linear(v) += bqm.linear(v);
-        }
+    Vartype vartype() const { return this->vartype_; }
 
-        // quadratic
-        for (size_type v = 0; v < bqm.num_variables(); ++v) {
-            if (bqm.adj_[v].size() == 0) continue;
-
-            this->adj_[v].reserve(this->adj_[v].size() + bqm.adj_[v].size());
-
-            auto span = bqm.neighborhood(v);
-            for (auto it = span.first; it != span.second; ++it) {
-                this->adj_[v].emplace_back(it->first, it->second);
-            }
-
-            this->adj_[v].sort_and_sum();
-        }
-    }
-
-    /**
-     * Add the variables, interactions and biases from another BQM.
-     *
-     * The size of the updated BQM will be adjusted appropriately.
-     *
-     * If the other BQM does not have the same vartype, the biases are adjusted
-     * accordingly.
-     *
-     * `mapping` must be a vector at least as long as the given BQM. It
-     * should map the variables of `bqm` to new labels.
-     */
-    template <class B, class I, class T>
-    void add_bqm(const BinaryQuadraticModel<B, I>& bqm, const std::vector<T>& mapping) {
-        if (bqm.vartype() != this->vartype()) {
-            // we could do this without the copy, but for now let's just do
-            // it simply
-            auto bqm_copy = BinaryQuadraticModel<B, I>(bqm);
-            bqm_copy.change_vartype(vartype());
-            this->add_bqm(bqm_copy, mapping);
-            return;
-        }
-
-        // offset
-        this->offset() += bqm.offset();
-
-        if (bqm.num_variables() == 0)
-            // nothing else to do, other BQM is empty
-            return;
-
-        // make sure we're big enough
-        T max_v = *std::max_element(mapping.begin(), mapping.begin() + bqm.num_variables());
-        if (max_v < 0) {
-            throw std::out_of_range("contents of mapping must be non-negative");
-        } else if ((size_type)max_v >= this->num_variables()) {
-            this->resize(max_v + 1);
-        }
-
-        // linear
-        for (size_type v = 0; v < bqm.num_variables(); ++v) {
-            this->linear(mapping[v]) += bqm.linear(v);
-        }
-
-        // quadratic
-        for (size_type v = 0; v < bqm.num_variables(); ++v) {
-            if (bqm.adj_[v].size() == 0) continue;
-
-            index_type this_v = mapping[v];
-
-            this->adj_[this_v].reserve(this->adj_[this_v].size() + bqm.adj_[v].size());
-
-            auto span = bqm.neighborhood(v);
-            for (auto it = span.first; it != span.second; ++it) {
-                this->adj_[this_v].emplace_back(mapping[it->first], it->second);
-            }
-
-            this->adj_[this_v].sort_and_sum();
-        }
-    }
-
-    using base_type::add_quadratic;
-
-    /**
-     * Construct a BQM from COO-formated iterators.
-     *
-     * A sparse BQM encoded in [COOrdinate] format is specified by three
-     * arrays of (row, column, value).
-     *
-     * [COOrdinate]: https://w.wiki/n$L
-     *
-     * `row_iterator` must be a random access iterator  pointing to the
-     * beginning of the row data. `col_iterator` must be a random access
-     * iterator pointing to the beginning of the column data. `bias_iterator`
-     * must be a random access iterator pointing to the beginning of the bias
-     * data. `length` must be the number of (row, column, bias) entries.
-     */
-    template <class ItRow, class ItCol, class ItBias>
-    void add_quadratic(ItRow row_iterator, ItCol col_iterator, ItBias bias_iterator,
-                       index_type length) {
-        // determine the number of variables so we can resize ourself if needed
-        if (length > 0) {
-            index_type max_label = std::max(*std::max_element(row_iterator, row_iterator + length),
-                                            *std::max_element(col_iterator, col_iterator + length));
-
-            if ((size_t)max_label >= base_type::num_variables()) {
-                this->resize(max_label + 1);
-            }
-        } else if (length < 0) {
-            throw std::out_of_range("length must be positive");
-        }
-
-        // count the number of elements to be inserted into each
-        std::vector<index_type> counts(base_type::num_variables(), 0);
-        ItRow rit(row_iterator);
-        ItCol cit(col_iterator);
-        for (index_type i = 0; i < length; ++i, ++rit, ++cit) {
-            if (*rit != *cit) {
-                counts[*rit] += 1;
-                counts[*cit] += 1;
-            }
-        }
-
-        // reserve the neighborhoods
-        for (size_type i = 0; i < counts.size(); ++i) {
-            base_type::adj_[i].reserve(counts[i]);
-        }
-
-        // add the values to the neighborhoods, not worrying about order
-        rit = row_iterator;
-        cit = col_iterator;
-        ItBias bit(bias_iterator);
-        for (index_type i = 0; i < length; ++i, ++rit, ++cit, ++bit) {
-            if (*rit == *cit) {
-                // let add_quadratic handle this case based on vartype
-                add_quadratic(*rit, *cit, *bit);
-            } else {
-                base_type::adj_[*rit].emplace_back(*cit, *bit);
-                base_type::adj_[*cit].emplace_back(*rit, *bit);
-            }
-        }
-
-        // finally sort and sum the neighborhoods we touched
-        for (size_type i = 0; i < counts.size(); ++i) {
-            if (counts[i] > 0) {
-                base_type::adj_[i].sort_and_sum();
-            }
-        }
-    }
-
-    /// Add one (disconnected) variable to the BQM and return its index.
-    index_type add_variable() {
-        index_type vi = this->num_variables();
-        this->resize(vi + 1);
-        return vi;
-    }
-
-    /// Change the vartype of the binary quadratic model
-    void change_vartype(Vartype vartype) {
-        if (vartype == vartype_) return;  // nothing to do
-
-        bias_type lin_mp, lin_offset_mp, quad_mp, quad_offset_mp, lin_quad_mp;
-        if (vartype == Vartype::BINARY) {
-            lin_mp = 2;
-            lin_offset_mp = -1;
-            quad_mp = 4;
-            lin_quad_mp = -2;
-            quad_offset_mp = .5;
-        } else if (vartype == Vartype::SPIN) {
-            lin_mp = .5;
-            lin_offset_mp = .5;
-            quad_mp = .25;
-            lin_quad_mp = .25;
-            quad_offset_mp = .125;
-        } else {
-            throw std::logic_error("unexpected vartype");
-        }
-
-        for (size_type ui = 0; ui < base_type::num_variables(); ++ui) {
-            bias_type lbias = base_type::linear_biases_[ui];
-
-            base_type::linear_biases_[ui] *= lin_mp;
-            base_type::offset_ += lin_offset_mp * lbias;
-
-            auto begin = base_type::adj_[ui].begin();
-            auto end = base_type::adj_[ui].end();
-            for (auto nit = begin; nit != end; ++nit) {
-                bias_type qbias = (*nit).second;
-
-                (*nit).second *= quad_mp;
-                base_type::linear_biases_[ui] += lin_quad_mp * qbias;
-                base_type::offset_ += quad_offset_mp * qbias;
-            }
-        }
-
-        this->vartype_ = vartype;
-        this->lower_bound_ = vartype_info<bias_type>::default_min(vartype);
-        this->upper_bound_ = vartype_info<bias_type>::default_max(vartype);
-    }
-
-    const bias_type& lower_bound(index_type v) const { return this->lower_bound_; }
-
-    /**
-     *  Return the number of interactions in the quadratic model.
-     *
-     * `O(num_variables)` complexity.
-     */
-    size_type num_interactions() const {
-        // we can do better than QuadraticModelBase by not needing to account
-        // for self-loops
-        size_type count = 0;
-        for (auto it = this->adj_.begin(); it != this->adj_.end(); ++it) {
-            count += it->size();
-        }
-        return count / 2;
-    }
-
-    /// The number of other variables `v` interacts with.
-    size_type num_interactions(index_type v) const { return base_type::num_interactions(v); }
-
-    /// Exchange the contents of the binary quadratic model with the contents of `other`.
-    void swap(BinaryQuadraticModel<bias_type, index_type>& other) {
-        base_type::swap(other);
-        std::swap(this->vartype_, other.vartype_);
-        std::swap(this->lower_bound_, other.lower_bound_);
-        std::swap(this->upper_bound_, other.upper_bound_);
-    }
-
-    const bias_type& upper_bound(index_type v) const { return this->upper_bound_; }
-
-    /// Return the vartype of the binary quadratic model.
-    const Vartype& vartype() const { return vartype_; }
-
-    /// Return the vartype of `v`.
-    const Vartype& vartype(index_type v) const { return vartype_; }
+    Vartype vartype(index_type v) const { return this->vartype_; }
 
  private:
+    // The vartype of the BQM
     Vartype vartype_;
 
-    // hold the lower and upper bounds for the vartype
-    bias_type lower_bound_;
-    bias_type upper_bound_;
+
+
+
+ // public:
+ //    /// The type of the base class.
+ //    using base_type = QuadraticModelBase<Bias, Index>;
+
+ //    /// The first template parameter (Bias).
+ //    using bias_type = typename base_type::bias_type;
+
+ //    /// The second template parameter (Index).
+ //    using index_type = Index;
+
+ //    /// Unsigned integral that can represent non-negative values.
+ //    using size_type = typename base_type::size_type;
+
+ //    /// Empty constructor. The vartype defaults to `Vartype::BINARY`.
+ //    BinaryQuadraticModel() : BinaryQuadraticModel(Vartype::BINARY) {}
+
+ //    /// Create a BQM of the given `vartype`.
+ //    explicit BinaryQuadraticModel(Vartype vartype)
+ //            : base_type(),
+ //              vartype_(vartype),
+ //              lower_bound_(vartype_info<bias_type>::default_min(vartype)),
+ //              upper_bound_(vartype_info<bias_type>::default_max(vartype)) {}
+
+ //    /// Create a BQM with `n` variables of the given `vartype`.
+ //    BinaryQuadraticModel(index_type n, Vartype vartype) : BinaryQuadraticModel(vartype) {
+ //        this->resize(n);
+ //    }
+
+ //    /**
+ //     * Create a BQM from a dense matrix.
+ //     *
+ //     * `dense` must be an array of length `num_variables^2`.
+ //     *
+ //     * Values on the diagonal are treated differently depending on the variable
+ //     * type.
+ //     * If the BQM is SPIN-valued, then the values on the diagonal are
+ //     * added to the offset.
+ //     * If the BQM is BINARY-valued, then the values on the diagonal are added
+ //     * as linear biases.
+ //     *
+ //     */
+ //    template <class T>
+ //    BinaryQuadraticModel(const T dense[], index_type num_variables, Vartype vartype)
+ //            : BinaryQuadraticModel(num_variables, vartype) {
+ //        add_quadratic(dense, num_variables);
+ //    }
+
+ //    /**
+ //     * Add the variables, interactions and biases from another BQM.
+ //     *
+ //     * The size of the updated BQM will be adjusted appropriately.
+ //     *
+ //     * If the other BQM does not have the same vartype, the biases are adjusted
+ //     * accordingly.
+ //     */
+ //    template <class B, class I>
+ //    void add_bqm(const BinaryQuadraticModel<B, I>& bqm) {
+ //        if (bqm.vartype() != this->vartype()) {
+ //            // we could do this without the copy, but for now let's just do
+ //            // it simply
+ //            auto bqm_copy = BinaryQuadraticModel<B, I>(bqm);
+ //            bqm_copy.change_vartype(vartype());
+ //            this->add_bqm(bqm_copy);
+ //            return;
+ //        }
+
+ //        // make sure we're big enough
+ //        if (bqm.num_variables() > this->num_variables()) {
+ //            this->resize(bqm.num_variables());
+ //        }
+
+ //        // offset
+ //        this->offset() += bqm.offset();
+
+ //        // linear
+ //        for (size_type v = 0; v < bqm.num_variables(); ++v) {
+ //            base_type::linear(v) += bqm.linear(v);
+ //        }
+
+ //        // quadratic
+ //        for (size_type v = 0; v < bqm.num_variables(); ++v) {
+ //            if (bqm.adj_[v].size() == 0) continue;
+
+ //            this->adj_[v].reserve(this->adj_[v].size() + bqm.adj_[v].size());
+
+ //            auto span = bqm.neighborhood(v);
+ //            for (auto it = span.first; it != span.second; ++it) {
+ //                this->adj_[v].emplace_back(it->first, it->second);
+ //            }
+
+ //            this->adj_[v].sort_and_sum();
+ //        }
+ //    }
+
+ //    /**
+ //     * Add the variables, interactions and biases from another BQM.
+ //     *
+ //     * The size of the updated BQM will be adjusted appropriately.
+ //     *
+ //     * If the other BQM does not have the same vartype, the biases are adjusted
+ //     * accordingly.
+ //     *
+ //     * `mapping` must be a vector at least as long as the given BQM. It
+ //     * should map the variables of `bqm` to new labels.
+ //     */
+ //    template <class B, class I, class T>
+ //    void add_bqm(const BinaryQuadraticModel<B, I>& bqm, const std::vector<T>& mapping) {
+ //        if (bqm.vartype() != this->vartype()) {
+ //            // we could do this without the copy, but for now let's just do
+ //            // it simply
+ //            auto bqm_copy = BinaryQuadraticModel<B, I>(bqm);
+ //            bqm_copy.change_vartype(vartype());
+ //            this->add_bqm(bqm_copy, mapping);
+ //            return;
+ //        }
+
+ //        // offset
+ //        this->offset() += bqm.offset();
+
+ //        if (bqm.num_variables() == 0)
+ //            // nothing else to do, other BQM is empty
+ //            return;
+
+ //        // make sure we're big enough
+ //        T max_v = *std::max_element(mapping.begin(), mapping.begin() + bqm.num_variables());
+ //        if (max_v < 0) {
+ //            throw std::out_of_range("contents of mapping must be non-negative");
+ //        } else if ((size_type)max_v >= this->num_variables()) {
+ //            this->resize(max_v + 1);
+ //        }
+
+ //        // linear
+ //        for (size_type v = 0; v < bqm.num_variables(); ++v) {
+ //            this->linear(mapping[v]) += bqm.linear(v);
+ //        }
+
+ //        // quadratic
+ //        for (size_type v = 0; v < bqm.num_variables(); ++v) {
+ //            if (bqm.adj_[v].size() == 0) continue;
+
+ //            index_type this_v = mapping[v];
+
+ //            this->adj_[this_v].reserve(this->adj_[this_v].size() + bqm.adj_[v].size());
+
+ //            auto span = bqm.neighborhood(v);
+ //            for (auto it = span.first; it != span.second; ++it) {
+ //                this->adj_[this_v].emplace_back(mapping[it->first], it->second);
+ //            }
+
+ //            this->adj_[this_v].sort_and_sum();
+ //        }
+ //    }
+
+ //    using base_type::add_quadratic;
+
+ //    *
+ //     * Construct a BQM from COO-formated iterators.
+ //     *
+ //     * A sparse BQM encoded in [COOrdinate] format is specified by three
+ //     * arrays of (row, column, value).
+ //     *
+ //     * [COOrdinate]: https://w.wiki/n$L
+ //     *
+ //     * `row_iterator` must be a random access iterator  pointing to the
+ //     * beginning of the row data. `col_iterator` must be a random access
+ //     * iterator pointing to the beginning of the column data. `bias_iterator`
+ //     * must be a random access iterator pointing to the beginning of the bias
+ //     * data. `length` must be the number of (row, column, bias) entries.
+     
+ //    template <class ItRow, class ItCol, class ItBias>
+ //    void add_quadratic(ItRow row_iterator, ItCol col_iterator, ItBias bias_iterator,
+ //                       index_type length) {
+ //        // determine the number of variables so we can resize ourself if needed
+ //        if (length > 0) {
+ //            index_type max_label = std::max(*std::max_element(row_iterator, row_iterator + length),
+ //                                            *std::max_element(col_iterator, col_iterator + length));
+
+ //            if ((size_t)max_label >= base_type::num_variables()) {
+ //                this->resize(max_label + 1);
+ //            }
+ //        } else if (length < 0) {
+ //            throw std::out_of_range("length must be positive");
+ //        }
+
+ //        // count the number of elements to be inserted into each
+ //        std::vector<index_type> counts(base_type::num_variables(), 0);
+ //        ItRow rit(row_iterator);
+ //        ItCol cit(col_iterator);
+ //        for (index_type i = 0; i < length; ++i, ++rit, ++cit) {
+ //            if (*rit != *cit) {
+ //                counts[*rit] += 1;
+ //                counts[*cit] += 1;
+ //            }
+ //        }
+
+ //        // reserve the neighborhoods
+ //        for (size_type i = 0; i < counts.size(); ++i) {
+ //            base_type::adj_[i].reserve(counts[i]);
+ //        }
+
+ //        // add the values to the neighborhoods, not worrying about order
+ //        rit = row_iterator;
+ //        cit = col_iterator;
+ //        ItBias bit(bias_iterator);
+ //        for (index_type i = 0; i < length; ++i, ++rit, ++cit, ++bit) {
+ //            if (*rit == *cit) {
+ //                // let add_quadratic handle this case based on vartype
+ //                add_quadratic(*rit, *cit, *bit);
+ //            } else {
+ //                base_type::adj_[*rit].emplace_back(*cit, *bit);
+ //                base_type::adj_[*cit].emplace_back(*rit, *bit);
+ //            }
+ //        }
+
+ //        // finally sort and sum the neighborhoods we touched
+ //        for (size_type i = 0; i < counts.size(); ++i) {
+ //            if (counts[i] > 0) {
+ //                base_type::adj_[i].sort_and_sum();
+ //            }
+ //        }
+ //    }
+
+ //    /// Add one (disconnected) variable to the BQM and return its index.
+ //    index_type add_variable() {
+ //        index_type vi = this->num_variables();
+ //        this->resize(vi + 1);
+ //        return vi;
+ //    }
+
+ //    /// Change the vartype of the binary quadratic model
+ //    void change_vartype(Vartype vartype) {
+ //        if (vartype == vartype_) return;  // nothing to do
+
+ //        bias_type lin_mp, lin_offset_mp, quad_mp, quad_offset_mp, lin_quad_mp;
+ //        if (vartype == Vartype::BINARY) {
+ //            lin_mp = 2;
+ //            lin_offset_mp = -1;
+ //            quad_mp = 4;
+ //            lin_quad_mp = -2;
+ //            quad_offset_mp = .5;
+ //        } else if (vartype == Vartype::SPIN) {
+ //            lin_mp = .5;
+ //            lin_offset_mp = .5;
+ //            quad_mp = .25;
+ //            lin_quad_mp = .25;
+ //            quad_offset_mp = .125;
+ //        } else {
+ //            throw std::logic_error("unexpected vartype");
+ //        }
+
+ //        for (size_type ui = 0; ui < base_type::num_variables(); ++ui) {
+ //            bias_type lbias = base_type::linear_biases_[ui];
+
+ //            base_type::linear_biases_[ui] *= lin_mp;
+ //            base_type::offset_ += lin_offset_mp * lbias;
+
+ //            auto begin = base_type::adj_[ui].begin();
+ //            auto end = base_type::adj_[ui].end();
+ //            for (auto nit = begin; nit != end; ++nit) {
+ //                bias_type qbias = (*nit).second;
+
+ //                (*nit).second *= quad_mp;
+ //                base_type::linear_biases_[ui] += lin_quad_mp * qbias;
+ //                base_type::offset_ += quad_offset_mp * qbias;
+ //            }
+ //        }
+
+ //        this->vartype_ = vartype;
+ //        this->lower_bound_ = vartype_info<bias_type>::default_min(vartype);
+ //        this->upper_bound_ = vartype_info<bias_type>::default_max(vartype);
+ //    }
+
+ //    const bias_type& lower_bound(index_type v) const { return this->lower_bound_; }
+
+ //    /**
+ //     *  Return the number of interactions in the quadratic model.
+ //     *
+ //     * `O(num_variables)` complexity.
+ //     */
+ //    size_type num_interactions() const {
+ //        // we can do better than QuadraticModelBase by not needing to account
+ //        // for self-loops
+ //        size_type count = 0;
+ //        for (auto it = this->adj_.begin(); it != this->adj_.end(); ++it) {
+ //            count += it->size();
+ //        }
+ //        return count / 2;
+ //    }
+
+ //    /// The number of other variables `v` interacts with.
+ //    size_type num_interactions(index_type v) const { return base_type::num_interactions(v); }
+
+ //    /// Exchange the contents of the binary quadratic model with the contents of `other`.
+ //    void swap(BinaryQuadraticModel<bias_type, index_type>& other) {
+ //        base_type::swap(other);
+ //        std::swap(this->vartype_, other.vartype_);
+ //        std::swap(this->lower_bound_, other.lower_bound_);
+ //        std::swap(this->upper_bound_, other.upper_bound_);
+ //    }
+
+ //    const bias_type& upper_bound(index_type v) const { return this->upper_bound_; }
+
+ //    /// Return the vartype of the binary quadratic model.
+ //    const Vartype& vartype() const { return vartype_; }
+
+ //    /// Return the vartype of `v`.
+ //    const Vartype& vartype(index_type v) const { return vartype_; }
+
+ // private:
+ //    Vartype vartype_;
+
+ //    // hold the lower and upper bounds for the vartype
+ //    bias_type lower_bound_;
+ //    bias_type upper_bound_;
 };
 
 template <class T>

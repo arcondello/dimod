@@ -14,11 +14,13 @@
 
 #pragma once
 
+#include <algorithm>
 #include <memory>
 #include <utility>
 #include <vector>
 
-#include "dimod/quadratic_model.h"  // Neighborhood
+#include "dimod/neighborhood.h"
+#include "dimod/vartypes.h"
 
 namespace dimod {
 namespace abc {
@@ -35,14 +37,99 @@ class QuadraticModelBase {
     /// Unsigned integral type that can represent non-negative values.
     using size_type = std::size_t;
 
- private:
-    std::vector<bias_type> linear_biases_;
+    class const_quadratic_iterator {
+     public:
+        struct value_type {
+            index_type u;
+            index_type v;
+            bias_type bias;
 
-    std::unique_ptr<std::vector<Neighborhood<bias_type, index_type>>> adj_ptr_;
+            explicit value_type(index_type u) : u(u), v(-1), bias(NAN) {}
+        };
+        using pointer = const value_type*;
+        using reference = const value_type&;
+        using difference_type = std::ptrdiff_t;
+        using iterator_category = std::forward_iterator_tag;
 
-    bias_type offset_;
+        const_quadratic_iterator() : adj_ptr_(nullptr) {}
 
- public:
+        const_quadratic_iterator(const std::vector<Neighborhood<bias_type, index_type>>* adj_ptr,
+                                 index_type u)
+                : adj_ptr_(adj_ptr), term_(u), vi_(0) {
+            if (adj_ptr_ != nullptr) {
+                // advance through the neighborhoods until we find one on the
+                // lower triangle
+                for (index_type& u = this->term_.u;
+                     static_cast<size_type>(u) < this->adj_ptr_->size(); ++u) {
+                    auto& neighborhood = (*adj_ptr_)[u];
+
+                    if (neighborhood.size() && neighborhood.cbegin()->first <= u) {
+                        // we found one
+                        this->term_.v = neighborhood.cbegin()->first;
+                        this->term_.bias = neighborhood.cbegin()->second;
+                        return;
+                    }
+                }
+            }
+        }
+
+        const reference operator*() const { return this->term_; }
+
+        const pointer operator->() const { return &(this->term_); }
+
+        const_quadratic_iterator& operator++() {
+            index_type& vi = this->vi_;
+
+            ++vi;  // advance to the next
+
+            for (index_type& u = this->term_.u; static_cast<size_type>(u) < this->adj_ptr_->size();
+                 ++u) {
+                auto& neighborhood = (*adj_ptr_)[u];
+
+                auto it = neighborhood.cbegin() + vi;
+
+                if (it != neighborhood.cend() && it->first <= u) {
+                    // we found one
+                    this->term_.v = it->first;
+                    this->term_.bias = it->second;
+                    return *this;
+                }
+
+                vi = 0;
+            }
+
+            return *this;
+        }
+
+        const_quadratic_iterator operator++(int) {
+            const_quadratic_iterator tmp(*this);
+            ++(*this);
+            return tmp;
+        }
+
+        friend bool operator==(const const_quadratic_iterator& a,
+                               const const_quadratic_iterator& b) {
+            return (a.adj_ptr_ == nullptr && b.adj_ptr_ == nullptr) ||
+                   (a.adj_ptr_ == b.adj_ptr_ && a.term_.u == b.term_.u && a.vi_ == b.vi_);
+        }
+
+        friend bool operator!=(const const_quadratic_iterator& a,
+                               const const_quadratic_iterator& b) {
+            return !(a == b);
+        }
+
+     private:
+        // note that unlike QuandraticModelBase, we use a regular pointer
+        // because the QuadraticModelBase owns the adjacency structure
+        const std::vector<Neighborhood<bias_type, index_type>>* adj_ptr_;
+
+        value_type term_;  // the current term
+
+        index_type vi_;  // term_.v's location in the neighborhood of term_.u
+    };
+
+    friend class const_quadratic_iterator;
+
     QuadraticModelBase() : linear_biases_(), adj_ptr_(), offset_(0) {}
 
     /// Copy constructor
@@ -57,6 +144,21 @@ class QuadraticModelBase {
     /// Move constructor
     QuadraticModelBase(QuadraticModelBase&& other) noexcept { *this = std::move(other); }
 
+    /// Copy assignment operator
+    QuadraticModelBase& operator=(const QuadraticModelBase& other) {
+        if (this != &other) {
+            this->linear_biases_ = other.linear_biases_;  // copy
+            if (other.has_adj()) {
+                this->enforce_adj();
+                (*adj_ptr_) = (*other.adj_ptr_);  // copy
+            } else {
+                this->adj_ptr_.reset(nullptr);
+            }
+
+            this->offset_ = other.offset_;
+        }
+    }
+
     /// Move assignment operator
     QuadraticModelBase& operator=(QuadraticModelBase&& other) noexcept {
         if (this != &other) {
@@ -67,24 +169,8 @@ class QuadraticModelBase {
         return *this;
     }
 
+    virtual ~QuadraticModelBase() {}
 
-    // QuadraticModelBase()
-
-    // virtual ~QuadraticModelBase() {}
-
- protected:
-    explicit QuadraticModelBase(std::vector<bias_type>&& biases)
-            : linear_biases_(biases), adj_ptr_(), offset_(0) {}
-
-    index_type add_variable() {
-        this->linear_biases_.push_back(0);
-        if (this->has_adj()) {
-            this->adj_ptr_->resize(this->adj_ptr_->size() + 1);
-        }
-        return this->linear_biases_.size() - 1;
-    }
-
- public:
     void add_quadratic(index_type u, index_type v, bias_type bias) {
         assert(0 <= u && static_cast<size_t>(u) < this->num_variables());
         assert(0 <= v && static_cast<size_t>(v) < this->num_variables());
@@ -113,6 +199,45 @@ class QuadraticModelBase {
             (*adj_ptr_)[u][v] += bias;
             (*adj_ptr_)[v][u] += bias;
         }
+    }
+
+    void add_quadratic(std::initializer_list<index_type> row, std::initializer_list<index_type> col,
+                       std::initializer_list<bias_type> biases) {
+        auto rit = row.begin();
+        auto cit = col.begin();
+        auto bit = biases.begin();
+        for (; rit < row.end() && cit < col.end() && bit < biases.end(); ++rit, ++cit, ++bit) {
+            this->add_quadratic(*rit, *cit, *bit);
+        }
+    }
+
+    const_quadratic_iterator cbegin_quadratic() const {
+        return const_quadratic_iterator(this->adj_ptr_.get(), 0);
+    }
+
+    const_quadratic_iterator cend_quadratic() const {
+        return const_quadratic_iterator(this->adj_ptr_.get(), this->num_variables());
+    }
+
+    template <class B, class I>
+    bool is_equal(const QuadraticModelBase<B, I>& other) const {
+        // easy checks first
+        if (this->num_variables() != other.num_variables() ||
+            this->num_interactions() != other.num_interactions() ||
+            this->offset_ != other.offset_ ||
+            !std::equal(this->linear_biases_.begin(), this->linear_biases_.end(),
+                        other.linear_biases_.begin())) {
+            return false;
+        }
+
+        // check quadratic. We already checked the number of interactions so
+        // if one is present we can assume it's empty
+        if (this->has_adj() && other.has_adj()) {
+            // check that the neighborhoods are equal
+            throw std::logic_error("todo 142");
+        }
+
+        return true;
     }
 
     bool is_linear() const {
@@ -170,18 +295,128 @@ class QuadraticModelBase {
 
     bias_type quadratic_at(index_type u, index_type v) const {
         if (!adj_ptr_) {
-            return 0;
+            throw std::out_of_range("given variables have no interaction");
         }
         return (*adj_ptr_)[u].at(v);
     }
 
-    // void set_linear(index_type v, bias_type bias) { this->linear_biases_[v] = bias; }
+    bool remove_interaction(index_type u, index_type v) {
+        if (!this->has_adj()) {
+            return false;
+        }
+        if ((*adj_ptr_)[u].erase(v)) {
+            if (u != v) {
+                (*adj_ptr_)[v].erase(u);
+            }
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    void scale(bias_type scalar) {
+        this->offset_ *= scalar;
+
+        // linear biases
+        for (bias_type& bias : this->linear_biases_) {
+            bias *= scalar;
+        }
+
+        if (!this->has_adj()) {
+            // we're done
+            return;
+        }
+
+        // quadratic biases
+        for (auto& n : (*adj_ptr_)) {
+            for (auto& term : n) {
+                term.second *= scalar;
+            }
+        }
+    }
+
+    void set_linear(index_type v, bias_type bias) {
+        assert(v >= 0 && static_cast<size_type>(v) < this->num_variables());
+        this->linear_biases_[v] = bias;
+    }
+
+    void set_linear(index_type v, std::initializer_list<bias_type> biases) {
+        assert(v >= 0 && static_cast<size_type>(v) < this->num_variables());
+        assert(biases.size() + v <= this->num_variables());
+        for (const bias_type& b : biases) {
+            this->linear_biases_[v] = b;
+            ++v;
+        }
+    }
+
+    void set_offset(bias_type offset) { this->offset_ = offset; }
+
+    void set_quadratic(index_type u, index_type v, bias_type bias) {
+        assert(0 <= u && static_cast<size_t>(u) < this->num_variables());
+        assert(0 <= v && static_cast<size_t>(v) < this->num_variables());
+
+        this->enforce_adj();
+
+        if (u == v) {
+            switch (this->vartype(u)) {
+                // unlike add_quadratic, setting is not really defined.
+                case Vartype::BINARY: {
+                    throw std::domain_error(
+                            "Cannot set the quadratic bias of a binary variable with itself");
+                }
+                case Vartype::SPIN: {
+                    throw std::domain_error(
+                            "Cannot set the quadratic bias of a spin variable with itself");
+                }
+                default: {
+                    (*adj_ptr_)[u][v] = bias;
+                    break;
+                }
+            }
+        } else {
+            (*adj_ptr_)[u][v] = bias;
+            (*adj_ptr_)[v][u] = bias;
+        }
+    }
+
+    friend void swap(QuadraticModelBase& first, QuadraticModelBase& second) {
+        using std::swap;
+        swap(first.linear_biases_, second.linear_biases_);
+        swap(first.adj_ptr_, second.adj_ptr_);
+        swap(first.offset_, second.offset_);
+    }
 
     virtual bias_type upper_bound(index_type) const = 0;
 
     virtual Vartype vartype(index_type) const = 0;
 
+ protected:
+    explicit QuadraticModelBase(std::vector<bias_type>&& biases)
+            : linear_biases_(biases), adj_ptr_(), offset_(0) {}
+
+    explicit QuadraticModelBase(index_type n) : linear_biases_(n), adj_ptr_(), offset_(0) {}
+
+    index_type add_variable() { return this->add_variables(1); }
+
+    index_type add_variables(index_type n) {
+        assert(n >= 0);
+        index_type size = this->num_variables();
+
+        this->linear_biases_.resize(size + n);
+        if (this->has_adj()) {
+            this->adj_ptr_->resize(size + n);
+        }
+
+        return size;
+    }
+
  private:
+    std::vector<bias_type> linear_biases_;
+
+    std::unique_ptr<std::vector<Neighborhood<bias_type, index_type>>> adj_ptr_;
+
+    bias_type offset_;
+
     inline void enforce_adj() {
         if (!this->adj_ptr_) {
             this->adj_ptr_ = std::unique_ptr<std::vector<Neighborhood<bias_type, index_type>>>(
