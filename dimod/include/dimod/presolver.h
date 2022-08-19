@@ -85,7 +85,7 @@ class PreSolver {
 
     /// Remove any variables where the upper and lower bounds are the same
     size_type remove_fixed_variables() {
-        return 0;
+        return 0;  // todo
     }
 
     // Remove any constraints with 0 or 1 variables.
