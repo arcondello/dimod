@@ -13,13 +13,13 @@
 //    limitations under the License.
 
 #include "../Catch2/single_include/catch2/catch.hpp"
-#include "dimod/neighborhood.h"
+#include "dimod/abc.h"
 
 namespace dimod {
 
 SCENARIO("Neighborhood can be manipulated") {
     GIVEN("An empty Neighborhood") {
-        auto neighborhood = Neighborhood<float, size_t>();
+        auto neighborhood = abc::Neighborhood<float, size_t>();
 
         WHEN("some variables/biases are emplaced") {
             neighborhood.emplace_back(0, .5);
@@ -66,41 +66,41 @@ SCENARIO("Neighborhood can be manipulated") {
             }
 
             THEN("we can create a vector from the neighborhood") {
-                std::vector<std::pair<size_t, float>> pairs(neighborhood.begin(),
-                                                            neighborhood.end());
+                std::vector<abc::Neighborhood<float, size_t>::value_type> pairs(
+                        neighborhood.begin(), neighborhood.end());
 
-                REQUIRE(pairs[0].first == 0);
-                REQUIRE(pairs[0].second == .5);
-                REQUIRE(pairs[1].first == 1);
-                REQUIRE(pairs[1].second == 1.5);
-                REQUIRE(pairs[2].first == 3);
-                REQUIRE(pairs[2].second == -3);
+                REQUIRE(pairs[0].v == 0);
+                REQUIRE(pairs[0].bias == .5);
+                REQUIRE(pairs[1].v == 1);
+                REQUIRE(pairs[1].bias == 1.5);
+                REQUIRE(pairs[2].v == 3);
+                REQUIRE(pairs[2].bias == -3);
             }
 
             THEN("we can create a vector from the const neighborhood") {
-                std::vector<std::pair<size_t, float>> pairs(neighborhood.cbegin(),
-                                                            neighborhood.cend());
+                std::vector<abc::Neighborhood<float, size_t>::value_type> pairs(
+                        neighborhood.begin(), neighborhood.end());
 
-                REQUIRE(pairs[0].first == 0);
-                REQUIRE(pairs[0].second == .5);
-                REQUIRE(pairs[1].first == 1);
-                REQUIRE(pairs[1].second == 1.5);
-                REQUIRE(pairs[2].first == 3);
-                REQUIRE(pairs[2].second == -3);
+                REQUIRE(pairs[0].v == 0);
+                REQUIRE(pairs[0].bias == .5);
+                REQUIRE(pairs[1].v == 1);
+                REQUIRE(pairs[1].bias == 1.5);
+                REQUIRE(pairs[2].v == 3);
+                REQUIRE(pairs[2].bias == -3);
             }
 
             THEN("we can modify the biases via the iterator") {
                 auto it = neighborhood.begin();
 
-                (*it).second = 18;
+                (*it).bias = 18;
                 REQUIRE(neighborhood.at(0) == 18);
 
                 it++;
-                (*it).second = -48;
+                (*it).bias = -48;
                 REQUIRE(neighborhood.at(1) == -48);
 
                 ++it;
-                it->second = 104;
+                it->bias = 104;
                 REQUIRE(neighborhood.at(3) == 104);
             }
 

@@ -20,11 +20,217 @@
 #include <utility>
 #include <vector>
 
-#include "dimod/neighborhood.h"
 #include "dimod/vartypes.h"
 
 namespace dimod {
 namespace abc {
+
+/**
+ * Used internally by QuadraticModelBase to sparsely encode the neighborhood of
+ * a variable.
+ */
+template <class Bias, class Index>
+class Neighborhood {
+ public:
+    /// The first template parameter (Bias).
+    using bias_type = Bias;
+
+    /// The second template parameter (Index).
+    using index_type = Index;
+
+    /// Unsigned integral type that can represent non-negative values.
+    using size_type = std::size_t;
+
+    // /// Exactly `pair<index_type, bias_type>`.
+    // using value_type = typename std::pair<index_type, bias_type>;
+
+    /// The linear terms.
+    struct value_type {
+        index_type v;
+        bias_type bias;
+
+        value_type(index_type v, bias_type bias): v(v), bias(bias) {}
+
+        bool operator<(const value_type& other) const { return this->v < other.v; }
+    };
+
+    /// A random access iterator to value_type.
+    using iterator = typename std::vector<value_type>::iterator;
+
+    /// A random access iterator to value_type`
+    using const_iterator = typename std::vector<value_type>::const_iterator;
+
+    /**
+     * Return a reference to the bias associated with `v`.
+     *
+     * This function automatically checks whether `v` is a variable in the
+     * neighborhood and throws a `std::out_of_range` exception if it is not.
+     */
+    const bias_type& at(index_type v) const {
+        auto it = this->lower_bound(v);
+        if (it != this->cend() && it->v == v) {
+            // it exists
+            return it->bias;
+        } else {
+            // it doesn't exist
+            throw std::out_of_range("given variable has no interaction");
+        }
+    }
+
+    value_type& back() { return this->neighborhood_.back(); }
+
+    const value_type& back() const { return this->neighborhood_.back(); }
+
+    /// Returns an iterator to the beginning.
+    iterator begin() { return this->neighborhood_.begin(); }
+
+    /// Returns an iterator to the end.
+    iterator end() { return this->neighborhood_.end(); }
+
+    /// Returns a const_iterator to the beginning.
+    const_iterator cbegin() const { return this->neighborhood_.cbegin(); }
+
+    /// Returns a const_iterator to the end.
+    const_iterator cend() const { return this->neighborhood_.cend(); }
+
+    /**
+     * Insert a neighbor, bias pair at the end of the neighborhood.
+     *
+     * Note that this does not keep the neighborhood self-consistent and should
+     * only be used when you know that the neighbor is greater than the current
+     * last element.
+     */
+    void emplace_back(index_type v, bias_type bias) { this->neighborhood_.emplace_back(v, bias); }
+
+    /// Returns whether the neighborhood is empty
+    bool empty() const { return !this->size(); }
+
+    /**
+     * Erase an element from the neighborhood.
+     *
+     * Returns the number of element removed, either 0 or 1.
+     */
+    size_type erase(index_type v) {
+        auto it = this->lower_bound(v);
+        if (it != this->end() && it->v == v) {
+            // is there to erase
+            this->neighborhood_.erase(it);
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    /// Erase elements from the neighborhood.
+    void erase(iterator first, iterator last) { this->neighborhood_.erase(first, last); }
+
+    /// Return an iterator to the first element that does not come before `v`.
+    iterator lower_bound(index_type v) {
+        return std::lower_bound(this->begin(), this->end(), v, this->cmp);
+    }
+
+    /// Return an iterator to the first element that does not come before `v`.
+    const_iterator lower_bound(index_type v) const {
+        return std::lower_bound(this->cbegin(), this->cend(), v, this->cmp);
+    }
+
+    /**
+     * Total bytes consumed by the biases and indices.
+     *
+     * If `capacity` is true, use the capacity of the underlying vectors rather
+     * than the size.
+     */
+    size_type nbytes(bool capacity = false) const noexcept {
+        // so there is no guaruntee that the compiler will not implement
+        // pair as pointers or whatever, but this seems like a reasonable
+        // assumption.
+        if (capacity) {
+            return this->neighborhood_.capacity() * sizeof(value_type);
+        } else {
+            return this->neighborhood_.size() * sizeof(value_type);
+        }
+    }
+
+    /**
+     * Return the bias at neighbor `v` or the default value.
+     *
+     * Return the bias of `v` if `v` is in the neighborhood, otherwise return
+     * the `value` provided without inserting `v`.
+     */
+    bias_type get(index_type v, bias_type value = 0) const {
+        auto it = this->lower_bound(v);
+
+        if (it != this->cend() && it->v == v) {
+            // it exists
+            return it->bias;
+        } else {
+            // it doesn't exist
+            return value;
+        }
+    }
+
+    /// Request that the neighborhood capacity be at least enough to contain `n`
+    /// elements.
+    void reserve(index_type n) { this->neighborhood_.reserve(n); }
+
+    /// Return the size of the neighborhood.
+    size_type size() const { return this->neighborhood_.size(); }
+
+    /// Sort the neighborhood and sum the biases of duplicate variables.
+    void sort_and_sum() {
+        if (!std::is_sorted(this->begin(), this->end())) {
+            std::sort(this->begin(), this->end());
+        }
+
+        // now remove any duplicates, summing the biases of duplicates
+        size_type i = 0;
+        size_type j = 1;
+
+        // walk quickly through the neighborhood until we find a duplicate
+        while (j < this->neighborhood_.size() &&
+               this->neighborhood_[i].v != this->neighborhood_[j].v) {
+            ++i;
+            ++j;
+        }
+
+        // if we found one, move into de-duplication
+        while (j < this->neighborhood_.size()) {
+            if (this->neighborhood_[i].v == this->neighborhood_[j].v) {
+                this->neighborhood_[i].bias += this->neighborhood_[j].bias;
+                ++j;
+            } else {
+                ++i;
+                this->neighborhood_[i] = this->neighborhood_[j];
+                ++j;
+            }
+        }
+
+        // finally resize to contain only the unique values
+        this->neighborhood_.resize(i + 1);
+    }
+
+    /**
+     * Access the bias of `v`.
+     *
+     * If `v` is in the neighborhood, the function returns a reference to
+     * its bias. If `v` is not in the neighborhood, it is inserted and a
+     * reference is returned to its bias.
+     */
+    bias_type& operator[](index_type v) {
+        auto it = this->lower_bound(v);
+        if (it == this->end() || it->v != v) {
+            // it doesn't exist so insert
+            it = this->neighborhood_.emplace(it, v, 0);
+        }
+        return it->bias;
+    }
+
+ protected:
+    std::vector<value_type> neighborhood_;
+
+    static inline bool cmp(value_type ub, index_type v) { return ub.v < v; }
+};
+
 
 template <class Bias, class Index>
 class QuadraticModelBase {
@@ -64,10 +270,10 @@ class QuadraticModelBase {
                      static_cast<size_type>(u) < this->adj_ptr_->size(); ++u) {
                     auto& neighborhood = (*adj_ptr_)[u];
 
-                    if (neighborhood.size() && neighborhood.cbegin()->first <= u) {
+                    if (neighborhood.size() && neighborhood.cbegin()->v <= u) {
                         // we found one
-                        this->term_.v = neighborhood.cbegin()->first;
-                        this->term_.bias = neighborhood.cbegin()->second;
+                        this->term_.v = neighborhood.cbegin()->v;
+                        this->term_.bias = neighborhood.cbegin()->bias;
                         return;
                     }
                 }
@@ -89,10 +295,10 @@ class QuadraticModelBase {
 
                 auto it = neighborhood.cbegin() + vi;
 
-                if (it != neighborhood.cend() && it->first <= u) {
+                if (it != neighborhood.cend() && it->v <= u) {
                     // we found one
-                    this->term_.v = it->first;
-                    this->term_.bias = it->second;
+                    this->term_.v = it->v;
+                    this->term_.bias = it->bias;
                     return *this;
                 }
 
@@ -240,8 +446,8 @@ class QuadraticModelBase {
         this->enforce_adj();
 
         // check the condition for adding at the back
-        assert((*adj_ptr_)[v].empty() || (*adj_ptr_)[v].back().first <= u);
-        assert((*adj_ptr_)[u].empty() || (*adj_ptr_)[u].back().first <= v);
+        assert((*adj_ptr_)[v].empty() || (*adj_ptr_)[v].back().v <= u);
+        assert((*adj_ptr_)[u].empty() || (*adj_ptr_)[u].back().v <= v);
 
         if (u == v) {
             switch (this->vartype(u)) {
@@ -347,8 +553,8 @@ class QuadraticModelBase {
                 en += u_val * this->linear(u);
 
                 for (auto& term : (*adj_ptr_)[u]) {
-                    if (term.first > u) break;
-                    en += term.second * u_val * *(sample_start + term.first);
+                    if (term.v > u) break;
+                    en += term.bias * u_val * *(sample_start + term.v);
                 }
             }
         } else {
@@ -424,7 +630,7 @@ class QuadraticModelBase {
 
                 // account for self-loops
                 auto lb = n.lower_bound(v);
-                if (lb != n.cend() && lb->first == v) {
+                if (lb != n.cend() && lb->v == v) {
                     count += 1;
                 }
 
@@ -511,7 +717,7 @@ class QuadraticModelBase {
         // quadratic biases
         for (auto& n : (*adj_ptr_)) {
             for (auto& term : n) {
-                term.second *= scalar;
+                term.bias *= scalar;
             }
         }
     }

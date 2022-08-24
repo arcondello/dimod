@@ -22,7 +22,6 @@
 #include <vector>
 
 #include "dimod/abc.h"
-#include "dimod/neighborhood.h"
 #include "dimod/vartypes.h"
 
 namespace dimod {
