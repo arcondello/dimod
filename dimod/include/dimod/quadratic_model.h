@@ -22,472 +22,470 @@
 #include <vector>
 
 #include "dimod/abc.h"
-#include "dimod/iterators.h"
 #include "dimod/neighborhood.h"
-#include "dimod/utils.h"
 #include "dimod/vartypes.h"
 
 namespace dimod {
 
-template <class Bias, class Index = int>
-class QuadraticModelBase {
- public:
-    /// The first template parameter (Bias)
-    using bias_type = Bias;
+// template <class Bias, class Index = int>
+// class QuadraticModelBase {
+//  public:
+//     /// The first template parameter (Bias)
+//     using bias_type = Bias;
 
-    /// The second template parameter (Index).
-    using index_type = Index;
+//     /// The second template parameter (Index).
+//     using index_type = Index;
 
-    /// Unsigned integral type that can represent non-negative values.
-    using size_type = std::size_t;
+//     /// Unsigned integral type that can represent non-negative values.
+//     using size_type = std::size_t;
 
-    /// A random access iterator to `pair<const index_type&, const bias_type&>`
-    using const_neighborhood_iterator =
-            typename Neighborhood<bias_type, index_type>::const_iterator;
+//     /// A random access iterator to `pair<const index_type&, const bias_type&>`
+//     using const_neighborhood_iterator =
+//             typename Neighborhood<bias_type, index_type>::const_iterator;
 
-    /// A forward iterator pointing to the quadratic biases.
-    using const_quadratic_iterator = ConstQuadraticIterator<Bias, Index>;
+//     /// A forward iterator pointing to the quadratic biases.
+//     using const_quadratic_iterator = ConstQuadraticIterator<Bias, Index>;
 
-    template <class B, class I>
-    friend class BinaryQuadraticModel;
+//     template <class B, class I>
+//     friend class BinaryQuadraticModel;
 
-    QuadraticModelBase() : offset_(0) {}
+//     QuadraticModelBase() : offset_(0) {}
 
-    /// Add quadratic bias for the given variables.
-    void add_quadratic(index_type u, index_type v, bias_type bias) {
-        assert(0 <= u && static_cast<size_t>(u) < this->num_variables());
-        assert(0 <= v && static_cast<size_t>(v) < this->num_variables());
+//     /// Add quadratic bias for the given variables.
+//     void add_quadratic(index_type u, index_type v, bias_type bias) {
+//         assert(0 <= u && static_cast<size_t>(u) < this->num_variables());
+//         assert(0 <= v && static_cast<size_t>(v) < this->num_variables());
 
-        if (u == v) {
-            switch (this->vartype(u)) {
-                case Vartype::BINARY: {
-                    // 1*1 == 1 and 0*0 == 0 so this is linear
-                    this->linear(u) += bias;
-                    break;
-                }
-                case Vartype::SPIN: {
-                    // -1*-1 == +1*+1 == 1 so this is a constant offset
-                    this->offset_ += bias;
-                    break;
-                }
-                default: {
-                    // self-loop
-                    this->adj_[u][v] += bias;
-                    break;
-                }
-            }
-        } else {
-            this->adj_[u][v] += bias;
-            this->adj_[v][u] += bias;
-        }
-    }
+//         if (u == v) {
+//             switch (this->vartype(u)) {
+//                 case Vartype::BINARY: {
+//                     // 1*1 == 1 and 0*0 == 0 so this is linear
+//                     this->linear(u) += bias;
+//                     break;
+//                 }
+//                 case Vartype::SPIN: {
+//                     // -1*-1 == +1*+1 == 1 so this is a constant offset
+//                     this->offset_ += bias;
+//                     break;
+//                 }
+//                 default: {
+//                     // self-loop
+//                     this->adj_[u][v] += bias;
+//                     break;
+//                 }
+//             }
+//         } else {
+//             this->adj_[u][v] += bias;
+//             this->adj_[v][u] += bias;
+//         }
+//     }
 
-    /*
-     * Add quadratic biases from a dense matrix.
-     *
-     * `dense` must be an array of length `num_variables^2`.
-     *
-     * Values on the diagonal are treated differently depending on the variable
-     * type.
-     *
-     * # Exceptions
-     * The behavior of this method is undefined when the model has fewer than
-     * `num_variables` variables.
-     */
-    template <class T>
-    void add_quadratic(const T dense[], index_type num_variables) {
-        assert(0 <= num_variables && static_cast<size_t>(num_variables) <= this->num_variables());
+//     /*
+//      * Add quadratic biases from a dense matrix.
+//      *
+//      * `dense` must be an array of length `num_variables^2`.
+//      *
+//      * Values on the diagonal are treated differently depending on the variable
+//      * type.
+//      *
+//      * # Exceptions
+//      * The behavior of this method is undefined when the model has fewer than
+//      * `num_variables` variables.
+//      */
+//     template <class T>
+//     void add_quadratic(const T dense[], index_type num_variables) {
+//         assert(0 <= num_variables && static_cast<size_t>(num_variables) <= this->num_variables());
 
-        if (this->is_linear()) {
-            for (index_type u = 0; u < num_variables; ++u) {
-                // diagonal
-                this->add_quadratic_back(u, u, dense[u * (num_variables + 1)]);
+//         if (this->is_linear()) {
+//             for (index_type u = 0; u < num_variables; ++u) {
+//                 // diagonal
+//                 this->add_quadratic_back(u, u, dense[u * (num_variables + 1)]);
 
-                // off-diagonal
-                for (index_type v = u + 1; v < num_variables; ++v) {
-                    bias_type qbias = dense[u * num_variables + v] + dense[v * num_variables + u];
+//                 // off-diagonal
+//                 for (index_type v = u + 1; v < num_variables; ++v) {
+//                     bias_type qbias = dense[u * num_variables + v] + dense[v * num_variables + u];
 
-                    if (qbias) {
-                        this->add_quadratic_back(u, v, qbias);
-                    }
-                }
-            }
-        } else {
-            // we cannot rely on the ordering
-            for (index_type u = 0; u < num_variables; ++u) {
-                // diagonal
-                this->add_quadratic(u, u, dense[u * (num_variables + 1)]);
+//                     if (qbias) {
+//                         this->add_quadratic_back(u, v, qbias);
+//                     }
+//                 }
+//             }
+//         } else {
+//             // we cannot rely on the ordering
+//             for (index_type u = 0; u < num_variables; ++u) {
+//                 // diagonal
+//                 this->add_quadratic(u, u, dense[u * (num_variables + 1)]);
 
-                // off-diagonal
-                for (index_type v = u + 1; v < num_variables; ++v) {
-                    bias_type qbias = dense[u * num_variables + v] + dense[v * num_variables + u];
+//                 // off-diagonal
+//                 for (index_type v = u + 1; v < num_variables; ++v) {
+//                     bias_type qbias = dense[u * num_variables + v] + dense[v * num_variables + u];
 
-                    if (qbias) {
-                        this->add_quadratic(u, v, qbias);
-                    }
-                }
-            }
-        }
-    }
+//                     if (qbias) {
+//                         this->add_quadratic(u, v, qbias);
+//                     }
+//                 }
+//             }
+//         }
+//     }
 
-    /**
-     * Add quadratic bias for the given variables at the end of eachother's neighborhoods.
-     *
-     * # Parameters
-     * - `u` - a variable.
-     * - `v` - a variable.
-     * - `bias` - the quadratic bias associated with `u` and `v`.
-     *
-     * # Exceptions
-     * When `u` is less than the largest neighbor in `v`'s neighborhood,
-     * `v` is less than the largest neighbor in `u`'s neighborhood, or either
-     * `u` or `v` is greater than ``num_variables()`` then the behavior of
-     * this method is undefined.
-     */
-    void add_quadratic_back(index_type u, index_type v, bias_type bias) {
-        assert(0 <= u && static_cast<size_t>(u) <= this->num_variables());
-        assert(0 <= v && static_cast<size_t>(v) <= this->num_variables());
+//     /**
+//      * Add quadratic bias for the given variables at the end of eachother's neighborhoods.
+//      *
+//      * # Parameters
+//      * - `u` - a variable.
+//      * - `v` - a variable.
+//      * - `bias` - the quadratic bias associated with `u` and `v`.
+//      *
+//      * # Exceptions
+//      * When `u` is less than the largest neighbor in `v`'s neighborhood,
+//      * `v` is less than the largest neighbor in `u`'s neighborhood, or either
+//      * `u` or `v` is greater than ``num_variables()`` then the behavior of
+//      * this method is undefined.
+//      */
+//     void add_quadratic_back(index_type u, index_type v, bias_type bias) {
+//         assert(0 <= u && static_cast<size_t>(u) <= this->num_variables());
+//         assert(0 <= v && static_cast<size_t>(v) <= this->num_variables());
 
-        // check the condition for adding at the back
-        assert(this->adj_[v].empty() || this->adj_[v].back().first <= u);
-        assert(this->adj_[u].empty() || this->adj_[u].back().first <= v);
+//         // check the condition for adding at the back
+//         assert(this->adj_[v].empty() || this->adj_[v].back().first <= u);
+//         assert(this->adj_[u].empty() || this->adj_[u].back().first <= v);
 
-        if (u == v) {
-            switch (this->vartype(u)) {
-                case Vartype::BINARY: {
-                    // 1*1 == 1 and 0*0 == 0 so this is linear
-                    this->linear(u) += bias;
-                    break;
-                }
-                case Vartype::SPIN: {
-                    // -1*-1 == +1*+1 == 1 so this is a constant offset
-                    this->offset() += bias;
-                    break;
-                }
-                default: {
-                    // self-loop
-                    this->adj_[u].emplace_back(v, bias);
-                    break;
-                }
-            }
-        } else {
-            this->adj_[u].emplace_back(v, bias);
-            this->adj_[v].emplace_back(u, bias);
-        }
-    }
+//         if (u == v) {
+//             switch (this->vartype(u)) {
+//                 case Vartype::BINARY: {
+//                     // 1*1 == 1 and 0*0 == 0 so this is linear
+//                     this->linear(u) += bias;
+//                     break;
+//                 }
+//                 case Vartype::SPIN: {
+//                     // -1*-1 == +1*+1 == 1 so this is a constant offset
+//                     this->offset() += bias;
+//                     break;
+//                 }
+//                 default: {
+//                     // self-loop
+//                     this->adj_[u].emplace_back(v, bias);
+//                     break;
+//                 }
+//             }
+//         } else {
+//             this->adj_[u].emplace_back(v, bias);
+//             this->adj_[v].emplace_back(u, bias);
+//         }
+//     }
 
-    /// Remove the offset and all variables and interactions from the model.
-    void clear() {
-        this->adj_.clear();
-        this->linear_biases_.clear();
-        this->offset_ = 0;
-    }
+//     /// Remove the offset and all variables and interactions from the model.
+//     void clear() {
+//         this->adj_.clear();
+//         this->linear_biases_.clear();
+//         this->offset_ = 0;
+//     }
 
-    /// Return True if the model has no quadratic biases.
-    bool is_linear() const {
-        for (auto it = adj_.begin(); it != adj_.end(); ++it) {
-            if ((*it).size()) {
-                return false;
-            }
-        }
-        return true;
-    }
+//     /// Return True if the model has no quadratic biases.
+//     bool is_linear() const {
+//         for (auto it = adj_.begin(); it != adj_.end(); ++it) {
+//             if ((*it).size()) {
+//                 return false;
+//             }
+//         }
+//         return true;
+//     }
 
-    const_quadratic_iterator cbegin_quadratic() const { return const_quadratic_iterator(this, 0); }
+//     const_quadratic_iterator cbegin_quadratic() const { return const_quadratic_iterator(this, 0); }
 
-    const_quadratic_iterator cend_quadratic() const {
-        return const_quadratic_iterator(this, this->num_variables());
-    }
+//     const_quadratic_iterator cend_quadratic() const {
+//         return const_quadratic_iterator(this, this->num_variables());
+//     }
 
-    /**
-     * Return the energy of the given sample.
-     *
-     * The `sample_start` must be random access iterator pointing to the
-     * beginning of the sample.
-     *
-     * The behavior of this function is undefined when the sample is not
-     * `num_variables()` long.
-     */
-    template <class Iter>  // todo: allow different return types
-    bias_type energy(Iter sample_start) const {
-        bias_type en = offset();
+//     /**
+//      * Return the energy of the given sample.
+//      *
+//      * The `sample_start` must be random access iterator pointing to the
+//      * beginning of the sample.
+//      *
+//      * The behavior of this function is undefined when the sample is not
+//      * `num_variables()` long.
+//      */
+//     template <class Iter>  // todo: allow different return types
+//     bias_type energy(Iter sample_start) const {
+//         bias_type en = offset();
 
-        for (index_type u = 0; u < static_cast<index_type>(num_variables()); ++u) {
-            auto u_val = *(sample_start + u);
+//         for (index_type u = 0; u < static_cast<index_type>(num_variables()); ++u) {
+//             auto u_val = *(sample_start + u);
 
-            en += u_val * linear(u);
+//             en += u_val * linear(u);
 
-            auto span = neighborhood(u);
-            for (auto nit = span.first; nit != span.second && (*nit).first <= u; ++nit) {
-                auto v_val = *(sample_start + (*nit).first);
-                auto bias = (*nit).second;
-                en += bias * u_val * v_val;
-            }
-        }
+//             auto span = neighborhood(u);
+//             for (auto nit = span.first; nit != span.second && (*nit).first <= u; ++nit) {
+//                 auto v_val = *(sample_start + (*nit).first);
+//                 auto bias = (*nit).second;
+//                 en += bias * u_val * v_val;
+//             }
+//         }
 
-        return en;
-    }
+//         return en;
+//     }
 
-    /**
-     * Return the energy of the given sample.
-     *
-     * The `sample` must be a vector containing the sample.
-     *
-     * The behavior of this function is undefined when the sample is not
-     * `num_variables()` long.
-     */
-    template <class T>
-    bias_type energy(const std::vector<T>& sample) const {
-        // todo: check length?
-        return energy(sample.cbegin());
-    }
+//     /**
+//      * Return the energy of the given sample.
+//      *
+//      * The `sample` must be a vector containing the sample.
+//      *
+//      * The behavior of this function is undefined when the sample is not
+//      * `num_variables()` long.
+//      */
+//     template <class T>
+//     bias_type energy(const std::vector<T>& sample) const {
+//         // todo: check length?
+//         return energy(sample.cbegin());
+//     }
 
-    virtual const bias_type& lower_bound(index_type) const = 0;
+//     virtual const bias_type& lower_bound(index_type) const = 0;
 
-    /// Return a reference to the linear bias associated with `v`.
-    bias_type& linear(index_type v) { return linear_biases_[v]; }
+//     /// Return a reference to the linear bias associated with `v`.
+//     bias_type& linear(index_type v) { return linear_biases_[v]; }
 
-    /// Return a reference to the linear bias associated with `v`.
-    const bias_type& linear(index_type v) const { return linear_biases_[v]; }
+//     /// Return a reference to the linear bias associated with `v`.
+//     const bias_type& linear(index_type v) const { return linear_biases_[v]; }
 
-    /// Return a pair of iterators - the start and end of the neighborhood
-    std::pair<const_neighborhood_iterator, const_neighborhood_iterator> neighborhood(
-            index_type u) const {
-        return std::make_pair(adj_[u].cbegin(), adj_[u].cend());
-    }
+//     /// Return a pair of iterators - the start and end of the neighborhood
+//     std::pair<const_neighborhood_iterator, const_neighborhood_iterator> neighborhood(
+//             index_type u) const {
+//         return std::make_pair(adj_[u].cbegin(), adj_[u].cend());
+//     }
 
-    /**
-     * The neighborhood of variable `v`.
-     *
-     * @param A variable `v`.
-     * @param The neighborhood will start with the first out variable that
-     * does not compare less than `start`.
-     *
-     * @returns A pair of iterators pointing to the start and end of the
-     *     neighborhood.
-     */
-    std::pair<const_neighborhood_iterator, const_neighborhood_iterator> neighborhood(
-            index_type u, index_type start) const {
-        return std::make_pair(adj_[u].lower_bound(start), adj_[u].cend());
-    }
+//     *
+//      * The neighborhood of variable `v`.
+//      *
+//      * @param A variable `v`.
+//      * @param The neighborhood will start with the first out variable that
+//      * does not compare less than `start`.
+//      *
+//      * @returns A pair of iterators pointing to the start and end of the
+//      *     neighborhood.
+     
+//     std::pair<const_neighborhood_iterator, const_neighborhood_iterator> neighborhood(
+//             index_type u, index_type start) const {
+//         return std::make_pair(adj_[u].lower_bound(start), adj_[u].cend());
+//     }
 
-    /**
-     * Return the quadratic bias associated with `u`, `v`.
-     *
-     * If `u` and `v` do not have a quadratic bias, returns 0.
-     *
-     * Note that this function does not return a reference, this is because
-     * each quadratic bias is stored twice.
-     *
-     */
-    bias_type quadratic(index_type u, index_type v) const { return adj_[u].get(v); }
+//     /**
+//      * Return the quadratic bias associated with `u`, `v`.
+//      *
+//      * If `u` and `v` do not have a quadratic bias, returns 0.
+//      *
+//      * Note that this function does not return a reference, this is because
+//      * each quadratic bias is stored twice.
+//      *
+//      */
+//     bias_type quadratic(index_type u, index_type v) const { return adj_[u].get(v); }
 
-    /**
-     * Return the quadratic bias associated with `u`, `v`.
-     *
-     * Note that this function does not return a reference, this is because
-     * each quadratic bias is stored twice.
-     *
-     * Raises an `out_of_range` error if either `u` or `v` are not variables or
-     * if they do not have an interaction then the function throws an exception.
-     */
-    bias_type quadratic_at(index_type u, index_type v) const { return adj_[u].at(v); }
+//     /**
+//      * Return the quadratic bias associated with `u`, `v`.
+//      *
+//      * Note that this function does not return a reference, this is because
+//      * each quadratic bias is stored twice.
+//      *
+//      * Raises an `out_of_range` error if either `u` or `v` are not variables or
+//      * if they do not have an interaction then the function throws an exception.
+//      */
+//     bias_type quadratic_at(index_type u, index_type v) const { return adj_[u].at(v); }
 
-    /**
-     * Total bytes consumed by the biases and indices.
-     *
-     * If `capacity` is true, use the capacity of the underlying vectors rather
-     * than the size.
-     */
-    size_type nbytes(bool capacity = false) const noexcept {
-        size_type count = sizeof(bias_type);  // offset
-        if (capacity) {
-            count += this->linear_biases_.capacity() * sizeof(bias_type);
-        } else {
-            count += this->linear_biases_.size() * sizeof(bias_type);
-        }
-        for (size_type v = 0; v < this->num_variables(); ++v) {
-            count += this->adj_[v].nbytes(capacity);
-        }
-        return count;
-    }
+//     /**
+//      * Total bytes consumed by the biases and indices.
+//      *
+//      * If `capacity` is true, use the capacity of the underlying vectors rather
+//      * than the size.
+//      */
+//     size_type nbytes(bool capacity = false) const noexcept {
+//         size_type count = sizeof(bias_type);  // offset
+//         if (capacity) {
+//             count += this->linear_biases_.capacity() * sizeof(bias_type);
+//         } else {
+//             count += this->linear_biases_.size() * sizeof(bias_type);
+//         }
+//         for (size_type v = 0; v < this->num_variables(); ++v) {
+//             count += this->adj_[v].nbytes(capacity);
+//         }
+//         return count;
+//     }
 
-    /// Return the number of variables in the quadratic model.
-    size_type num_variables() const { return linear_biases_.size(); }
+//     /// Return the number of variables in the quadratic model.
+//     size_type num_variables() const { return linear_biases_.size(); }
 
-    /**
-     *  Return the number of interactions in the quadratic model.
-     *
-     * `O(num_variables*log(num_variables))` complexity.
-     */
-    size_type num_interactions() const {
-        size_type count = 0;
-        for (index_type v = 0; v < static_cast<index_type>(this->num_variables()); ++v) {
-            count += this->adj_[v].size();
+//     /**
+//      *  Return the number of interactions in the quadratic model.
+//      *
+//      * `O(num_variables*log(num_variables))` complexity.
+//      */
+//     size_type num_interactions() const {
+//         size_type count = 0;
+//         for (index_type v = 0; v < static_cast<index_type>(this->num_variables()); ++v) {
+//             count += this->adj_[v].size();
 
-            // account for self-loops
-            auto lb = this->adj_[v].lower_bound(v);
-            if (lb != this->adj_[v].cend() && lb->first == v) {
-                count += 1;
-            }
-        }
-        return count / 2;
-    }
+//             // account for self-loops
+//             auto lb = this->adj_[v].lower_bound(v);
+//             if (lb != this->adj_[v].cend() && lb->first == v) {
+//                 count += 1;
+//             }
+//         }
+//         return count / 2;
+//     }
 
-    /// The number of other variables `v` interacts with.
-    size_type num_interactions(index_type v) const { return adj_[v].size(); }
+//     /// The number of other variables `v` interacts with.
+//     size_type num_interactions(index_type v) const { return adj_[v].size(); }
 
-    /// Return a reference to the offset
-    bias_type& offset() { return offset_; }
+//     /// Return a reference to the offset
+//     bias_type& offset() { return offset_; }
 
-    /// Return a reference to the offset
-    const bias_type& offset() const { return offset_; }
+//     /// Return a reference to the offset
+//     const bias_type& offset() const { return offset_; }
 
-    /// Remove the interaction if it exists
-    bool remove_interaction(index_type u, index_type v) {
-        if (adj_[u].erase(v)) {
-            if (u != v) {
-                adj_[v].erase(u);
-            }
-            return true;
-        } else {
-            return false;
-        }
-    }
+//     /// Remove the interaction if it exists
+//     bool remove_interaction(index_type u, index_type v) {
+//         if (adj_[u].erase(v)) {
+//             if (u != v) {
+//                 adj_[v].erase(u);
+//             }
+//             return true;
+//         } else {
+//             return false;
+//         }
+//     }
 
-    /// Resize model to contain n variables.
-    void resize(index_type n) {
-        if (n < (index_type)this->num_variables()) {
-            // Clean out any of the to-be-deleted variables from the
-            // neighborhoods.
-            // This approach is better in the dense case. In the sparse case
-            // we could determine which neighborhoods need to be trimmed rather
-            // than just doing them all.
-            for (index_type v = 0; v < n; ++v) {
-                this->adj_[v].erase(this->adj_[v].lower_bound(n), this->adj_[v].end());
-            }
-        }
+//     /// Resize model to contain n variables.
+//     void resize(index_type n) {
+//         if (n < (index_type)this->num_variables()) {
+//             // Clean out any of the to-be-deleted variables from the
+//             // neighborhoods.
+//             // This approach is better in the dense case. In the sparse case
+//             // we could determine which neighborhoods need to be trimmed rather
+//             // than just doing them all.
+//             for (index_type v = 0; v < n; ++v) {
+//                 this->adj_[v].erase(this->adj_[v].lower_bound(n), this->adj_[v].end());
+//             }
+//         }
 
-        this->linear_biases_.resize(n);
-        this->adj_.resize(n);
-    }
+//         this->linear_biases_.resize(n);
+//         this->adj_.resize(n);
+//     }
 
-    /// Scale offset, linear biases, and interactions by a factor
-    void scale(double scale_factor) {
-        // adjust offset
-        offset() *= scale_factor;
+//     /// Scale offset, linear biases, and interactions by a factor
+//     void scale(double scale_factor) {
+//         // adjust offset
+//         offset() *= scale_factor;
 
-        // adjust linear biases and quadratic interactions
-        for (size_type u = 0; u < num_variables(); u++) {
-            linear_biases_[u] *= scale_factor;
+//         // adjust linear biases and quadratic interactions
+//         for (size_type u = 0; u < num_variables(); u++) {
+//             linear_biases_[u] *= scale_factor;
 
-            auto begin = adj_[u].begin();
-            auto end = adj_[u].end();
-            for (auto nit = begin; nit != end; ++nit) {
-                (*nit).second *= scale_factor;
-            }
-        }
-    }
+//             auto begin = adj_[u].begin();
+//             auto end = adj_[u].end();
+//             for (auto nit = begin; nit != end; ++nit) {
+//                 (*nit).second *= scale_factor;
+//             }
+//         }
+//     }
 
-    /// Set the quadratic bias for the given variables.
-    void set_quadratic(index_type u, index_type v, bias_type bias) {
-        assert(0 <= u && static_cast<size_t>(u) < this->num_variables());
-        assert(0 <= v && static_cast<size_t>(v) < this->num_variables());
+//     /// Set the quadratic bias for the given variables.
+//     void set_quadratic(index_type u, index_type v, bias_type bias) {
+//         assert(0 <= u && static_cast<size_t>(u) < this->num_variables());
+//         assert(0 <= v && static_cast<size_t>(v) < this->num_variables());
 
-        if (u == v) {
-            switch (this->vartype(u)) {
-                // unlike add_quadratic, setting is not really defined.
-                case Vartype::BINARY: {
-                    throw std::domain_error(
-                            "Cannot set the quadratic bias of a binary variable with itself");
-                }
-                case Vartype::SPIN: {
-                    throw std::domain_error(
-                            "Cannot set the quadratic bias of a spin variable with itself");
-                }
-                default: {
-                    this->adj_[u][v] = bias;
-                    break;
-                }
-            }
-        } else {
-            this->adj_[u][v] = bias;
-            this->adj_[v][u] = bias;
-        }
-    }
+//         if (u == v) {
+//             switch (this->vartype(u)) {
+//                 // unlike add_quadratic, setting is not really defined.
+//                 case Vartype::BINARY: {
+//                     throw std::domain_error(
+//                             "Cannot set the quadratic bias of a binary variable with itself");
+//                 }
+//                 case Vartype::SPIN: {
+//                     throw std::domain_error(
+//                             "Cannot set the quadratic bias of a spin variable with itself");
+//                 }
+//                 default: {
+//                     this->adj_[u][v] = bias;
+//                     break;
+//                 }
+//             }
+//         } else {
+//             this->adj_[u][v] = bias;
+//             this->adj_[v][u] = bias;
+//         }
+//     }
 
-    /// Exchange the contents of the quadratic model with the contents of `other`.
-    void swap(QuadraticModelBase<bias_type, index_type>& other) {
-        std::swap(this->linear_biases_, other.linear_biases_);
-        std::swap(this->adj_, other.adj_);
-        std::swap(this->offset_, other.offset_);
-    }
+//     /// Exchange the contents of the quadratic model with the contents of `other`.
+//     void swap(QuadraticModelBase<bias_type, index_type>& other) {
+//         std::swap(this->linear_biases_, other.linear_biases_);
+//         std::swap(this->adj_, other.adj_);
+//         std::swap(this->offset_, other.offset_);
+//     }
 
-    /// Swap the linear and quadratic biases between two variables.
-    void swap_variables(index_type u, index_type v) {
-        assert(0 <= u && static_cast<size_t>(u) < this->num_variables());
-        assert(0 <= v && static_cast<size_t>(v) < this->num_variables());
+//     /// Swap the linear and quadratic biases between two variables.
+//     void swap_variables(index_type u, index_type v) {
+//         assert(0 <= u && static_cast<size_t>(u) < this->num_variables());
+//         assert(0 <= v && static_cast<size_t>(v) < this->num_variables());
 
-        if (u == v) return;  // nothing to do!
+//         if (u == v) return;  // nothing to do!
 
-        // developer note, this is pretty expensive since we remove an
-        // element and then add an element to each of the neighborhoods that
-        // touch u or v. We could do it more efficiently by just swapping
-        // their values if they are both present, or only moving the elements
-        // between u and v if only one is there. But let's use the simple
-        // implementation for now.
+//         // developer note, this is pretty expensive since we remove an
+//         // element and then add an element to each of the neighborhoods that
+//         // touch u or v. We could do it more efficiently by just swapping
+//         // their values if they are both present, or only moving the elements
+//         // between u and v if only one is there. But let's use the simple
+//         // implementation for now.
 
-        // remove any references to u or v in any other neighborhoods (don't
-        // worry, we'll put them back)
-        for (auto it = this->adj_[u].begin(); it < this->adj_[u].end(); ++it) {
-            if (it->first != v) {
-                this->adj_[it->first].erase(u);
-            }
-        }
-        for (auto it = this->adj_[v].begin(); it < this->adj_[v].end(); ++it) {
-            if (it->first != u) {
-                this->adj_[it->first].erase(v);
-            }
-        }
+//         // remove any references to u or v in any other neighborhoods (don't
+//         // worry, we'll put them back)
+//         for (auto it = this->adj_[u].begin(); it < this->adj_[u].end(); ++it) {
+//             if (it->first != v) {
+//                 this->adj_[it->first].erase(u);
+//             }
+//         }
+//         for (auto it = this->adj_[v].begin(); it < this->adj_[v].end(); ++it) {
+//             if (it->first != u) {
+//                 this->adj_[it->first].erase(v);
+//             }
+//         }
 
-        // swap the neighborhoods of u and v
-        std::swap(this->adj_[u], this->adj_[v]);
-        std::swap(this->linear_biases_[u], this->linear_biases_[v]);
+//         // swap the neighborhoods of u and v
+//         std::swap(this->adj_[u], this->adj_[v]);
+//         std::swap(this->linear_biases_[u], this->linear_biases_[v]);
 
-        // now put u and v back into their neighbor's neighborhoods (according
-        // to their new indices)
-        for (auto it = this->adj_[u].begin(); it < this->adj_[u].end(); ++it) {
-            if (it->first != v) {
-                this->adj_[it->first][u] = it->second;
-            }
-        }
-        for (auto it = this->adj_[v].begin(); it < this->adj_[v].end(); ++it) {
-            if (it->first != u) {
-                this->adj_[it->first][v] = it->second;
-            }
-        }
+//         // now put u and v back into their neighbor's neighborhoods (according
+//         // to their new indices)
+//         for (auto it = this->adj_[u].begin(); it < this->adj_[u].end(); ++it) {
+//             if (it->first != v) {
+//                 this->adj_[it->first][u] = it->second;
+//             }
+//         }
+//         for (auto it = this->adj_[v].begin(); it < this->adj_[v].end(); ++it) {
+//             if (it->first != u) {
+//                 this->adj_[it->first][v] = it->second;
+//             }
+//         }
 
-        // finally fix u and v themselves
-        if (this->adj_[u].erase(u)) {
-            auto bias = this->adj_[v][v];
-            this->adj_[u][v] = bias;
-            this->adj_[v][u] = bias;
-            this->adj_[v].erase(v);
-        }
-    }
+//         // finally fix u and v themselves
+//         if (this->adj_[u].erase(u)) {
+//             auto bias = this->adj_[v][v];
+//             this->adj_[u][v] = bias;
+//             this->adj_[v][u] = bias;
+//             this->adj_[v].erase(v);
+//         }
+//     }
 
-    virtual const bias_type& upper_bound(index_type) const = 0;
+//     virtual const bias_type& upper_bound(index_type) const = 0;
 
-    virtual const Vartype& vartype(index_type) const = 0;
+//     virtual const Vartype& vartype(index_type) const = 0;
 
- protected:
-    std::vector<bias_type> linear_biases_;
-    std::vector<Neighborhood<bias_type, index_type>> adj_;
+//  protected:
+//     std::vector<bias_type> linear_biases_;
+//     std::vector<Neighborhood<bias_type, index_type>> adj_;
 
-    bias_type offset_;
+//     bias_type offset_;
 
-    friend class ConstQuadraticIterator<Bias, Index>;
-};
+//     friend class ConstQuadraticIterator<Bias, Index>;
+// };
 
 
 /// A Binary Quadratic Model is a quadratic polynomial over binary variables.
@@ -514,9 +512,10 @@ class BinaryQuadraticModel : public abc::QuadraticModelBase<Bias, Index> {
 
     BinaryQuadraticModel(index_type n, Vartype vartype): base_type(n), vartype_(vartype) {}
 
-    template<class B, class I>
-    bool is_equal(const BinaryQuadraticModel<B, I>& other) const {
-        return this->vartype_ == other.vartype_ && base_type::is_equal(other);
+    template <class T>
+    BinaryQuadraticModel(const T dense[], index_type num_variables, Vartype vartype)
+            : BinaryQuadraticModel(num_variables, vartype) {
+        this->add_quadratic_from_dense(dense, num_variables);
     }
 
     bias_type lower_bound() const { return vartype_info<bias_type>::min(this->vartype_); }
@@ -854,20 +853,20 @@ class BinaryQuadraticModel : public abc::QuadraticModelBase<Bias, Index> {
  //    bias_type upper_bound_;
 };
 
-template <class T>
-struct VarInfo {
-    Vartype vartype;
-    T lb;
-    T ub;
+// template <class T>
+// struct VarInfo {
+//     Vartype vartype;
+//     T lb;
+//     T ub;
 
-    VarInfo(Vartype vartype, T lb, T ub) : vartype(vartype), lb(lb), ub(ub) {}
-};
+//     VarInfo(Vartype vartype, T lb, T ub) : vartype(vartype), lb(lb), ub(ub) {}
+// };
 
 template <class Bias, class Index = int>
-class QuadraticModel : public QuadraticModelBase<Bias, Index> {
+class QuadraticModel : public abc::QuadraticModelBase<Bias, Index> {
  public:
     /// The type of the base class.
-    using base_type = QuadraticModelBase<Bias, Index>;
+    using base_type = abc::QuadraticModelBase<Bias, Index>;
 
     /// The first template parameter (Bias).
     using bias_type = Bias;
@@ -878,18 +877,42 @@ class QuadraticModel : public QuadraticModelBase<Bias, Index> {
     /// Unsigned integral that can represent non-negative values.
     using size_type = typename base_type::size_type;
 
-    QuadraticModel() : base_type(), varinfo_() {}
+    QuadraticModel(): base_type(), varinfo_() {}
 
-    QuadraticModel(const QuadraticModel<bias_type, index_type>& qm) = default;
+    QuadraticModel(const QuadraticModel& qm) : base_type(qm), varinfo_(qm.varinfo_) {}
 
-    template <class B, class T>
-    explicit QuadraticModel(const BinaryQuadraticModel<B, T>& bqm) : base_type(bqm) {
-        assert(bqm.vartype() == Vartype::BINARY || bqm.vartype() == Vartype::SPIN);
+    QuadraticModel(const QuadraticModel&& qm) : base_type(std::move(qm)), varinfo_(std::move(qm.varinfo_)) {}
 
-        auto info = VarInfo<bias_type>(bqm.vartype(), vartype_info<bias_type>::min(bqm.vartype()),
-                                       vartype_info<bias_type>::max(bqm.vartype()));
+    explicit QuadraticModel(const BinaryQuadraticModel<bias_type, index_type>& bqm)
+            : base_type(bqm), varinfo_(bqm.num_variables(), varinfo_type(bqm.vartype())) {}
 
-        this->varinfo_.insert(this->varinfo_.begin(), bqm.num_variables(), info);
+    template<class B, class I>
+    explicit QuadraticModel(const BinaryQuadraticModel<B, I>& bqm) {
+        // in the future we could speed this up
+        this->resize(bqm.num_variables(), bqm.vartype(), bqm.lower_bound(), bqm.upper_bound());
+
+        for (size_type v = 0; v < bqm.num_variables(); ++v) {
+            this->set_linear(v, bqm.linear(v));
+        }
+
+        for (auto qit = bqm.cbegin_quadratic(); qit != bqm.cend_quadratic(); ++qit) {
+            this->add_quadratic_back(qit->u, qit->v, qit->bias);
+        }
+
+        this->set_offset(bqm.offset());
+    }
+
+    QuadraticModel& operator=(const QuadraticModel& other) {
+        base_type::operator=(other);
+        this->varinfo_ = other.varinfo_;
+        return *this;
+    }
+
+    QuadraticModel& operator=(QuadraticModel&& other) noexcept {
+        using std::swap;
+        base_type::operator=(std::move(other));
+        this->varinfo_ = std::move(other.varinfo_);
+        return *this;
     }
 
     index_type add_variable(Vartype vartype) {
@@ -912,82 +935,81 @@ class QuadraticModel : public QuadraticModelBase<Bias, Index> {
         index_type v = this->num_variables();
 
         this->varinfo_.emplace_back(vartype, lb, ub);
-        this->linear_biases_.resize(v + 1);
-        this->adj_.resize(v + 1);
+        base_type::add_variable();
 
         return v;
     }
 
-    void clear() {
-        this->varinfo_.clear();
-        base_type::clear();
-    }
+//     void clear() {
+//         this->varinfo_.clear();
+//         base_type::clear();
+//     }
 
-    /// Change the vartype of `v`, updating the biases appropriately.
-    void change_vartype(Vartype vartype, index_type v) {
-        if (vartype == this->vartype(v)) return;  // nothing to do
+//     /// Change the vartype of `v`, updating the biases appropriately.
+//     void change_vartype(Vartype vartype, index_type v) {
+//         if (vartype == this->vartype(v)) return;  // nothing to do
 
-        if (this->vartype(v) == Vartype::BINARY && vartype == Vartype::SPIN) {
-            // binary to spin
-            for (auto it = this->adj_[v].begin(); it != this->adj_[v].end(); ++it) {
-                this->linear(it->first) += it->second / 2;
-                this->adj_[it->first][v] /= 2;  // log(n)
-                it->second /= 2;
-            }
-            this->offset() += this->linear(v) / 2;
-            this->linear(v) /= 2;
+//         if (this->vartype(v) == Vartype::BINARY && vartype == Vartype::SPIN) {
+//             // binary to spin
+//             for (auto it = this->adj_[v].begin(); it != this->adj_[v].end(); ++it) {
+//                 this->linear(it->first) += it->second / 2;
+//                 this->adj_[it->first][v] /= 2;  // log(n)
+//                 it->second /= 2;
+//             }
+//             this->offset() += this->linear(v) / 2;
+//             this->linear(v) /= 2;
 
-            this->vartype(v) = Vartype::SPIN;
-            this->lower_bound(v) = -1;
-            this->upper_bound(v) = +1;
-        } else if (this->vartype(v) == Vartype::SPIN && vartype == Vartype::BINARY) {
-            // spin to binary
-            for (auto it = this->adj_[v].begin(); it != this->adj_[v].end(); ++it) {
-                this->linear(it->first) -= it->second;
-                this->adj_[it->first][v] *= 2;  // log(n)
-                it->second *= 2;
-            }
-            this->offset() -= this->linear(v);
-            this->linear(v) *= 2;
+//             this->vartype(v) = Vartype::SPIN;
+//             this->lower_bound(v) = -1;
+//             this->upper_bound(v) = +1;
+//         } else if (this->vartype(v) == Vartype::SPIN && vartype == Vartype::BINARY) {
+//             // spin to binary
+//             for (auto it = this->adj_[v].begin(); it != this->adj_[v].end(); ++it) {
+//                 this->linear(it->first) -= it->second;
+//                 this->adj_[it->first][v] *= 2;  // log(n)
+//                 it->second *= 2;
+//             }
+//             this->offset() -= this->linear(v);
+//             this->linear(v) *= 2;
 
-            this->vartype(v) = Vartype::BINARY;
-            this->lower_bound(v) = 0;
-            this->upper_bound(v) = 1;
-        } else if (this->vartype(v) == Vartype::BINARY && vartype == Vartype::INTEGER) {
-            // binary to integer
-            this->varinfo_[v].vartype = Vartype::INTEGER;
-        } else if (this->vartype(v) == Vartype::SPIN && vartype == Vartype::INTEGER) {
-            // spin to integer (via spin to binary)
-            this->change_vartype(Vartype::BINARY, v);
-            this->change_vartype(Vartype::INTEGER, v);
-        } else {
-            // todo: support integer to real and vice versa, need to figure
-            // out how to handle bounds in that case though
-            throw std::logic_error("invalid vartype change");
-        }
-    }
+//             this->vartype(v) = Vartype::BINARY;
+//             this->lower_bound(v) = 0;
+//             this->upper_bound(v) = 1;
+//         } else if (this->vartype(v) == Vartype::BINARY && vartype == Vartype::INTEGER) {
+//             // binary to integer
+//             this->varinfo_[v].vartype = Vartype::INTEGER;
+//         } else if (this->vartype(v) == Vartype::SPIN && vartype == Vartype::INTEGER) {
+//             // spin to integer (via spin to binary)
+//             this->change_vartype(Vartype::BINARY, v);
+//             this->change_vartype(Vartype::INTEGER, v);
+//         } else {
+//             // todo: support integer to real and vice versa, need to figure
+//             // out how to handle bounds in that case though
+//             throw std::logic_error("invalid vartype change");
+//         }
+//     }
 
-    bias_type& lower_bound(index_type v) { return varinfo_[v].lb; }
+    bias_type lower_bound(index_type v) const { return this->varinfo_[v].lb; }
 
-    const bias_type& lower_bound(index_type v) const { return varinfo_[v].lb; }
+//     const bias_type& lower_bound(index_type v) const { return varinfo_[v].lb; }
 
-    constexpr bias_type max_integer() { return vartype_limits<bias_type, Vartype::INTEGER>::max(); }
+//     constexpr bias_type max_integer() { return vartype_limits<bias_type, Vartype::INTEGER>::max(); }
 
-    /**
-     * Total bytes consumed by the biases, vartype info, bounds, and indices.
-     *
-     * If `capacity` is true, use the capacity of the underlying vectors rather
-     * than the size.
-     */
-    size_type nbytes(bool capacity = false) const noexcept {
-        size_type count = base_type::nbytes(capacity);
-        if (capacity) {
-            count += this->varinfo_.capacity() * sizeof(VarInfo<bias_type>);
-        } else {
-            count += this->varinfo_.size() * sizeof(VarInfo<bias_type>);
-        }
-        return count;
-    }
+//     /**
+//      * Total bytes consumed by the biases, vartype info, bounds, and indices.
+//      *
+//      * If `capacity` is true, use the capacity of the underlying vectors rather
+//      * than the size.
+//      */
+//     size_type nbytes(bool capacity = false) const noexcept {
+//         size_type count = base_type::nbytes(capacity);
+//         if (capacity) {
+//             count += this->varinfo_.capacity() * sizeof(VarInfo<bias_type>);
+//         } else {
+//             count += this->varinfo_.size() * sizeof(VarInfo<bias_type>);
+//         }
+//         return count;
+//     }
 
     // Resize the model to contain `n` variables.
     void resize(index_type n) {
@@ -999,7 +1021,8 @@ class QuadraticModel : public QuadraticModelBase<Bias, Index> {
                     "`vartype` is specified");
         }
         // doesn't matter what vartype we specify since we're shrinking
-        return this->resize(n, Vartype::BINARY, 0, 1);
+        base_type::resize(n);
+        this->varinfo_.erase(this->varinfo_.begin() + n, this->varinfo_.end());
     }
 
     /**
@@ -1038,64 +1061,88 @@ class QuadraticModel : public QuadraticModelBase<Bias, Index> {
         assert(vartype != Vartype::SPIN || lb == -1);
         assert(vartype != Vartype::SPIN || ub == +1);
 
-        this->varinfo_.resize(n, VarInfo<bias_type>(vartype, lb, ub));
+        this->varinfo_.resize(n, varinfo_type(vartype, lb, ub));
         base_type::resize(n);
     }
 
-    bias_type& upper_bound(index_type v) { return varinfo_[v].ub; }
+    void set_lower_bound(index_type v, bias_type lb) { this->varinfo_[v].lb = lb; }
 
-    const bias_type& upper_bound(index_type v) const { return varinfo_[v].ub; }
+    void set_upper_bound(index_type v, bias_type ub) { this->varinfo_[v].ub = ub; }
 
-    Vartype& vartype(index_type v) { return varinfo_[v].vartype; }
+    bias_type upper_bound(index_type v) const { return this->varinfo_[v].ub; }
 
-    const Vartype& vartype(index_type v) const { return varinfo_[v].vartype; }
+//     const bias_type& upper_bound(index_type v) const { return varinfo_[v].ub; }
 
-    void swap(QuadraticModel<bias_type, index_type>& other) {
-        base_type::swap(other);
-        std::swap(this->varinfo_, other.varinfo_);
-    }
+//     Vartype& vartype(index_type v) { return varinfo_[v].vartype; }
 
-    /// Exchange the contents of the quadratic model with the contents of `other`.
-    void swap_variables(index_type u, index_type v) {
-        base_type::swap_variables(u, v);  // also handles asserts
-        std::swap(this->varinfo_[u], this->varinfo_[v]);
-    }
+    Vartype vartype(index_type v) const { return this->varinfo_[v].vartype; }
+
+    // friend void swap(QuadraticModel& first, QuadraticModel& second) {
+    //     using std::swap;
+    //     throw std::logic_error("hi");
+    //     base_type::swap(first, second);
+    //     swap(first.varinfo_, second.varinfo_);
+    // }
+
+    // void swap(QuadraticModel<bias_type, index_type>& other) {
+    //     base_type::swap(other);
+    //     std::swap(this->varinfo_, other.varinfo_);
+    // }
+
+//     /// Exchange the contents of the quadratic model with the contents of `other`.
+//     void swap_variables(index_type u, index_type v) {
+//         base_type::swap_variables(u, v);  // also handles asserts
+//         std::swap(this->varinfo_[u], this->varinfo_[v]);
+//     }
 
  private:
-    std::vector<VarInfo<bias_type>> varinfo_;
+    struct varinfo_type {
+        Vartype vartype;
+        bias_type lb;
+        bias_type ub;
+
+        varinfo_type(Vartype vartype, bias_type lb, bias_type ub) : vartype(vartype), lb(lb), ub(ub) {}
+
+        varinfo_type(Vartype vartype): vartype(vartype) {
+            this->lb = vartype_info<bias_type>::default_min(vartype);
+            this->ub = vartype_info<bias_type>::default_max(vartype);
+        }
+    };
+
+    std::vector<varinfo_type> varinfo_;
 };
 
-template <class B, class N>
-std::ostream& operator<<(std::ostream& os, const BinaryQuadraticModel<B, N>& bqm) {
-    os << "BinaryQuadraticModel\n";
+// template <class B, class N>
+// std::ostream& operator<<(std::ostream& os, const BinaryQuadraticModel<B, N>& bqm) {
+//     os << "BinaryQuadraticModel\n";
 
-    if (bqm.vartype() == Vartype::SPIN) {
-        os << "  vartype: spin\n";
-    } else if (bqm.vartype() == Vartype::BINARY) {
-        os << "  vartype: binary\n";
-    } else {
-        os << "  vartype: unkown\n";
-    }
+//     if (bqm.vartype() == Vartype::SPIN) {
+//         os << "  vartype: spin\n";
+//     } else if (bqm.vartype() == Vartype::BINARY) {
+//         os << "  vartype: binary\n";
+//     } else {
+//         os << "  vartype: unkown\n";
+//     }
 
-    os << "  offset: " << bqm.offset() << "\n";
+//     os << "  offset: " << bqm.offset() << "\n";
 
-    os << "  linear (" << bqm.num_variables() << " variables):\n";
-    for (size_t v = 0; v < bqm.num_variables(); ++v) {
-        auto bias = bqm.linear(v);
-        if (bias) {
-            os << "    " << v << " " << bias << "\n";
-        }
-    }
+//     os << "  linear (" << bqm.num_variables() << " variables):\n";
+//     for (size_t v = 0; v < bqm.num_variables(); ++v) {
+//         auto bias = bqm.linear(v);
+//         if (bias) {
+//             os << "    " << v << " " << bias << "\n";
+//         }
+//     }
 
-    os << "  quadratic (" << bqm.num_interactions() << " interactions):\n";
-    for (size_t u = 0; u < bqm.num_variables(); ++u) {
-        auto span = bqm.neighborhood(u);
-        for (auto nit = span.first; nit != span.second && (*nit).first < u; ++nit) {
-            os << "    " << u << " " << (*nit).first << " " << (*nit).second << "\n";
-        }
-    }
+//     os << "  quadratic (" << bqm.num_interactions() << " interactions):\n";
+//     for (size_t u = 0; u < bqm.num_variables(); ++u) {
+//         auto span = bqm.neighborhood(u);
+//         for (auto nit = span.first; nit != span.second && (*nit).first < u; ++nit) {
+//             os << "    " << u << " " << (*nit).first << " " << (*nit).second << "\n";
+//         }
+//     }
 
-    return os;
-}
+//     return os;
+// }
 
 }  // namespace dimod

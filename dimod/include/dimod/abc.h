@@ -15,6 +15,7 @@
 #pragma once
 
 #include <algorithm>
+#include <iostream>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -133,11 +134,12 @@ class QuadraticModelBase {
     QuadraticModelBase() : linear_biases_(), adj_ptr_(), offset_(0) {}
 
     /// Copy constructor
-    QuadraticModelBase(const QuadraticModelBase& qm)
-            : linear_biases_(qm.linear_biases_), adj_ptr_(), offset_(qm.offset_) {
+    QuadraticModelBase(const QuadraticModelBase& other)
+            : linear_biases_(other.linear_biases_), adj_ptr_(), offset_(other.offset_) {
         // need to handle the adj if present
-        if (!qm.is_linear()) {
-            throw std::logic_error("todo 56");
+        if (!other.is_linear()) {
+            this->adj_ptr_ = std::unique_ptr<std::vector<Neighborhood<bias_type, index_type>>>(
+                    new std::vector<Neighborhood<bias_type, index_type>>(*other.adj_ptr_));
         }
     }
 
@@ -149,14 +151,15 @@ class QuadraticModelBase {
         if (this != &other) {
             this->linear_biases_ = other.linear_biases_;  // copy
             if (other.has_adj()) {
-                this->enforce_adj();
-                (*adj_ptr_) = (*other.adj_ptr_);  // copy
+                this->adj_ptr_ = std::unique_ptr<std::vector<Neighborhood<bias_type, index_type>>>(
+                        new std::vector<Neighborhood<bias_type, index_type>>(*other.adj_ptr_));
             } else {
                 this->adj_ptr_.reset(nullptr);
             }
 
             this->offset_ = other.offset_;
         }
+        return *this;
     }
 
     /// Move assignment operator
@@ -170,6 +173,11 @@ class QuadraticModelBase {
     }
 
     virtual ~QuadraticModelBase() {}
+
+    void add_linear(index_type v, bias_type bias) {
+        assert(v >= 0 && static_cast<size_type>(v) < this->num_variables());
+        this->linear_biases_[v] += bias;
+    }
 
     void add_quadratic(index_type u, index_type v, bias_type bias) {
         assert(0 <= u && static_cast<size_t>(u) < this->num_variables());
@@ -211,12 +219,157 @@ class QuadraticModelBase {
         }
     }
 
+    /**
+     * Add quadratic bias for the given variables at the end of eachother's neighborhoods.
+     *
+     * # Parameters
+     * - `u` - a variable.
+     * - `v` - a variable.
+     * - `bias` - the quadratic bias associated with `u` and `v`.
+     *
+     * # Exceptions
+     * When `u` is less than the largest neighbor in `v`'s neighborhood,
+     * `v` is less than the largest neighbor in `u`'s neighborhood, or either
+     * `u` or `v` is greater than ``num_variables()`` then the behavior of
+     * this method is undefined.
+     */
+    void add_quadratic_back(index_type u, index_type v, bias_type bias) {
+        assert(0 <= u && static_cast<size_t>(u) <= this->num_variables());
+        assert(0 <= v && static_cast<size_t>(v) <= this->num_variables());
+
+        this->enforce_adj();
+
+        // check the condition for adding at the back
+        assert((*adj_ptr_)[v].empty() || (*adj_ptr_)[v].back().first <= u);
+        assert((*adj_ptr_)[u].empty() || (*adj_ptr_)[u].back().first <= v);
+
+        if (u == v) {
+            switch (this->vartype(u)) {
+                case Vartype::BINARY: {
+                    // 1*1 == 1 and 0*0 == 0 so this is linear
+                    this->add_linear(u, bias);
+                    break;
+                }
+                case Vartype::SPIN: {
+                    // -1*-1 == +1*+1 == 1 so this is a constant offset
+                    this->offset_ += bias;
+                    break;
+                }
+                default: {
+                    // self-loop
+                    (*adj_ptr_)[u].emplace_back(v, bias);
+                    break;
+                }
+            }
+        } else {
+            (*adj_ptr_)[u].emplace_back(v, bias);
+            (*adj_ptr_)[v].emplace_back(u, bias);
+        }
+    }
+
+    /*
+     * Add quadratic biases from a dense matrix.
+     *
+     * `dense` must be an array of length `num_variables^2`.
+     *
+     * Values on the diagonal are treated differently depending on the variable
+     * type.
+     *
+     * # Exceptions
+     * The behavior of this method is undefined when the model has fewer than
+     * `num_variables` variables.
+     */
+    template<class T>
+    void add_quadratic_from_dense(const T dense[], index_type num_variables) {
+        assert(0 <= num_variables);
+        assert(static_cast<size_type>(num_variables) <= this->num_variables());
+
+        this->enforce_adj();
+
+        if (this->is_linear()) {
+            for (index_type u = 0; u < num_variables; ++u) {
+                // diagonal
+                this->add_quadratic_back(u, u, dense[u * (num_variables + 1)]);
+
+                // off-diagonal
+                for (index_type v = u + 1; v < num_variables; ++v) {
+                    bias_type qbias = dense[u * num_variables + v] + dense[v * num_variables + u];
+
+                    if (qbias) {
+                        this->add_quadratic_back(u, v, qbias);
+                    }
+                }
+            }
+        } else {
+            // we cannot rely on the ordering
+            for (index_type u = 0; u < num_variables; ++u) {
+                // diagonal
+                this->add_quadratic(u, u, dense[u * (num_variables + 1)]);
+
+                // off-diagonal
+                for (index_type v = u + 1; v < num_variables; ++v) {
+                    bias_type qbias = dense[u * num_variables + v] + dense[v * num_variables + u];
+
+                    if (qbias) {
+                        this->add_quadratic(u, v, qbias);
+                    }
+                }
+            }
+        }
+    }
+
     const_quadratic_iterator cbegin_quadratic() const {
         return const_quadratic_iterator(this->adj_ptr_.get(), 0);
     }
 
     const_quadratic_iterator cend_quadratic() const {
         return const_quadratic_iterator(this->adj_ptr_.get(), this->num_variables());
+    }
+
+    /**
+     * Return the energy of the given sample.
+     *
+     * The `sample_start` must be random access iterator pointing to the
+     * beginning of the sample.
+     *
+     * The behavior of this function is undefined when the sample is not
+     * `num_variables()` long.
+     */
+    template <class Iter>  // todo: allow different return types
+    bias_type energy(Iter sample_start) const {
+        bias_type en = this->offset();
+
+        if (has_adj()) {
+            for (index_type u = 0; static_cast<size_type>(u) < this->num_variables(); ++u) {
+                auto u_val = *(sample_start + u);
+
+
+                en += u_val * this->linear(u);
+
+                for (auto& term : (*adj_ptr_)[u]) {
+                    if (term.first > u) break;
+                    en += term.second * u_val * *(sample_start + term.first);
+                }
+            }
+        } else {
+            throw std::logic_error("todo 353");
+        }
+
+        return en;
+    }
+
+    /**
+     * Return the energy of the given sample.
+     *
+     * The `sample` must be a vector containing the sample.
+     *
+     * The behavior of this function is undefined when the sample is not
+     * `num_variables()` long.
+     */
+    template <class T>
+    bias_type energy(const std::vector<T>& sample) const {
+        // todo: check length?
+        return energy(sample.cbegin());
     }
 
     template <class B, class I>
@@ -228,6 +381,13 @@ class QuadraticModelBase {
             !std::equal(this->linear_biases_.begin(), this->linear_biases_.end(),
                         other.linear_biases_.begin())) {
             return false;
+        }
+
+        // check the vartype
+        for (size_type v = 0; v < this->num_variables(); ++v) {
+            if (this->vartype(v) != other.vartype(v)) {
+                return false;
+            }
         }
 
         // check quadratic. We already checked the number of interactions so
@@ -314,6 +474,27 @@ class QuadraticModelBase {
         }
     }
 
+    /// Resize model to contain n variables.
+    void resize(index_type n) {
+        assert(n >= 0);
+        this->linear_biases_.resize(n);
+
+        if (has_adj()) {
+            if (static_cast<size_type>(n) < this->num_variables()) {
+                // Clean out any of the to-be-deleted variables from the
+                // neighborhoods.
+                // This approach is better in the dense case. In the sparse case
+                // we could determine which neighborhoods need to be trimmed rather
+                // than just doing them all.
+                throw std::logic_error("not done");
+                // for (index_type v = 0; v < n; ++v) {
+                //     this->adj_[v].erase(this->adj_[v].lower_bound(n), this->adj_[v].end());
+                // }
+            }
+            this->adj_ptr_->resize(n);
+        }
+    }
+
     void scale(bias_type scalar) {
         this->offset_ *= scalar;
 
@@ -377,13 +558,6 @@ class QuadraticModelBase {
             (*adj_ptr_)[u][v] = bias;
             (*adj_ptr_)[v][u] = bias;
         }
-    }
-
-    friend void swap(QuadraticModelBase& first, QuadraticModelBase& second) {
-        using std::swap;
-        swap(first.linear_biases_, second.linear_biases_);
-        swap(first.adj_ptr_, second.adj_ptr_);
-        swap(first.offset_, second.offset_);
     }
 
     virtual bias_type upper_bound(index_type) const = 0;

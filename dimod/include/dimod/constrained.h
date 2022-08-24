@@ -246,20 +246,25 @@ class ConstrainedQuadraticModel {
     /// Return the upper bound for variable `v`.
     bias_type upper_bound(index_type v) const { return this->objective_.upper_bound(v); }
 
-    void remove_constraint(index_type i) { this->constraints_.erase(this->constraints_.begin() + i); }
+    void remove_constraint(index_type i) {
+        this->constraints_.erase(this->constraints_.begin() + i);
+    }
 
-    void set_lower_bound(index_type v, bias_type bound) { this->objective_.lower_bound(v) = bound; }
-    void set_upper_bound(index_type v, bias_type bound) { this->objective_.upper_bound(v) = bound; }
-
+    void set_lower_bound(index_type v, bias_type bound) {
+        this->objective_.set_lower_bound(v, bound);
+    }
+    void set_upper_bound(index_type v, bias_type bound) {
+        this->objective_.set_upper_bound(v, bound);
+    }
 
     template <class B, class I>
-    void set_objective(const QuadraticModelBase<B, I>& objective) {
+    void set_objective(const abc::QuadraticModelBase<B, I>& objective) {
         if (!this->num_variables()) {
             // the objective is empty, so we can just add, easy peasy
             for (size_type i = 0; i < objective.num_variables(); ++i) {
                 this->objective_.add_variable(objective.vartype(i), objective.lower_bound(i),
                                               objective.upper_bound(i));
-                this->objective_.linear(i) = objective.linear(i);
+                this->objective_.set_linear(i, objective.linear(i));
             }
 
             for (auto qit = objective.cbegin_quadratic(); qit != objective.cend_quadratic();
@@ -267,7 +272,7 @@ class ConstrainedQuadraticModel {
                 this->objective_.add_quadratic_back(qit->u, qit->v, qit->bias);
             }
 
-            this->objective_.offset() = objective.offset();
+            this->objective_.set_offset(objective.offset());
 
             return;
         }

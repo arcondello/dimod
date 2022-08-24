@@ -35,10 +35,9 @@ SCENARIO("constrained quadratic models") {
             auto qm = QuadraticModel<float>();
             qm.add_variable(Vartype::SPIN);
             qm.add_variable(Vartype::REAL, -5, +17);
-            qm.linear(0) = 1.5;
-            qm.linear(1) = -5;
+            qm.set_linear(0, {1.5, -5});
             qm.add_quadratic(0, 1, -2);
-            qm.offset() = 5;
+            qm.set_offset(5);
 
             cqm.set_objective(qm);
 
