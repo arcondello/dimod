@@ -258,7 +258,7 @@ class QuadraticModelBase {
         using difference_type = std::ptrdiff_t;
         using iterator_category = std::forward_iterator_tag;
 
-        const_quadratic_iterator() : adj_ptr_(nullptr) {}
+        const_quadratic_iterator() : adj_ptr_(nullptr), term_(0) {}
 
         const_quadratic_iterator(const std::vector<Neighborhood<bias_type, index_type>>* adj_ptr,
                                  index_type u)
@@ -348,6 +348,8 @@ class QuadraticModelBase {
                     new std::vector<Neighborhood<bias_type, index_type>>(*other.adj_ptr_));
         }
     }
+
+    using const_neighborhood_iterator = typename Neighborhood<bias_type, index_type>::const_iterator;
 
     /// Move constructor
     QuadraticModelBase(QuadraticModelBase&& other) noexcept { *this = std::move(other); }
@@ -521,6 +523,24 @@ class QuadraticModelBase {
                     }
                 }
             }
+        }
+    }
+
+    const_neighborhood_iterator cbegin_neighborhood(index_type v) const {
+        if (has_adj()) {
+            return (*adj_ptr_)[v].begin();
+        } else {
+            // I am a bit suspicious that this works, but it seems to
+            return const_neighborhood_iterator(nullptr);
+        }
+    }
+
+    const_neighborhood_iterator cend_neighborhood(index_type v) const {
+        if (has_adj()) {
+            return (*adj_ptr_)[v].end();
+        } else {
+            // I am a bit suspicious that this works, but it seems to
+            return const_neighborhood_iterator(nullptr);
         }
     }
 

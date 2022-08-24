@@ -80,16 +80,7 @@ cdef class cyBQM_template(cyBQMBase):
 
     @offset.setter
     def offset(self, bias_type offset):
-        self._set_offset(offset)
-
-    cdef void _add_linear(self, Py_ssize_t vi, bias_type bias):
-        # unsafe version of .add_linear
-        cdef bias_type *b = &(self.cppbqm.linear(vi))
-        b[0] += bias
-
-    cdef void _add_offset(self, bias_type bias):
-        cdef bias_type *b = &(self.cppbqm.offset())
-        b[0] += bias
+        self.cppbqm.set_offset(offset)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -118,33 +109,33 @@ cdef class cyBQM_template(cyBQMBase):
 
         return ldata
 
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    def _ineighborhood(self, Py_ssize_t ui):
-        """
-        """
-        if not 0 <= ui < self.num_variables():
-            raise ValueError(f"out of range variable, {ui!r}")
+    # @cython.boundscheck(False)
+    # @cython.wraparound(False)
+    # def _ineighborhood(self, Py_ssize_t ui):
+    #     """
+    #     """
+    #     if not 0 <= ui < self.num_variables():
+    #         raise ValueError(f"out of range variable, {ui!r}")
 
-        cdef Py_ssize_t degree = self.cppbqm.num_interactions(ui)
+    #     cdef Py_ssize_t degree = self.cppbqm.num_interactions(ui)
 
-        dtype = np.dtype([('ui', self.index_dtype), ('b', self.dtype)],
-                         align=False)
-        neighbors = np.empty(degree, dtype=dtype)
+    #     dtype = np.dtype([('ui', self.index_dtype), ('b', self.dtype)],
+    #                      align=False)
+    #     neighbors = np.empty(degree, dtype=dtype)
         
-        cdef index_type[:] index_view = neighbors['ui']
-        cdef bias_type[:] bias_view = neighbors['b']
+    #     cdef index_type[:] index_view = neighbors['ui']
+    #     cdef bias_type[:] bias_view = neighbors['b']
 
-        span = self.cppbqm.neighborhood(ui)
-        cdef Py_ssize_t i = 0
-        while span.first != span.second:
-            index_view[i] = deref(span.first).first
-            bias_view[i] = deref(span.first).second
+    #     span = self.cppbqm.neighborhood(ui)
+    #     cdef Py_ssize_t i = 0
+    #     while span.first != span.second:
+    #         index_view[i] = deref(span.first).first
+    #         bias_view[i] = deref(span.first).second
 
-            i += 1
-            inc(span.first)
+    #         i += 1
+    #         inc(span.first)
 
-        return neighbors
+    #     return neighbors
 
     cdef Py_ssize_t _index(self, v, bint permissive=False) except -1:
         """Return the index of variable `v`.
@@ -161,18 +152,9 @@ cdef class cyBQM_template(cyBQMBase):
 
         return vi
 
-    cdef void _set_linear(self, Py_ssize_t vi, bias_type bias):
-        # unsafe version of .set_linear
-        cdef bias_type *b = &(self.cppbqm.linear(vi))
-        b[0] = bias
-
-    cdef void _set_offset(self, bias_type bias):
-        cdef bias_type *b = &(self.cppbqm.offset())
-        b[0] = bias
-
     def add_linear(self, v, bias_type bias):
         cdef Py_ssize_t vi = self._index(v, permissive=True)
-        self._add_linear(vi, bias)
+        self.cppbqm.add_linear(vi, bias)
 
     def add_linear_equality_constraint(self, object terms,
                                        bias_type lagrange_multiplier,
@@ -252,21 +234,21 @@ cdef class cyBQM_template(cyBQMBase):
         cdef Py_ssize_t vi = self._index(v, permissive=True)
         self.cppbqm.add_quadratic(ui, vi, bias)
 
-    def add_quadratic_from_arrays(self,
-                                  ConstInteger[::1] irow,
-                                  ConstInteger[::1] icol,
-                                  ConstNumeric[::1] qdata):
+    # def add_quadratic_from_arrays(self,
+    #                               ConstInteger[::1] irow,
+    #                               ConstInteger[::1] icol,
+    #                               ConstNumeric[::1] qdata):
 
-        if not irow.shape[0] == icol.shape[0] == qdata.shape[0]:
-            raise ValueError("quadratic vectors should be equal length")
-        cdef Py_ssize_t length = irow.shape[0]
+    #     if not irow.shape[0] == icol.shape[0] == qdata.shape[0]:
+    #         raise ValueError("quadratic vectors should be equal length")
+    #     cdef Py_ssize_t length = irow.shape[0]
 
-        if length:
-            if self.variables._is_range():
-                self.cppbqm.add_quadratic(&irow[0], &icol[0], &qdata[0], length)
-                self.variables._stop = self.cppbqm.num_variables()
-            else:
-                raise NotImplementedError
+    #     if length:
+    #         if self.variables._is_range():
+    #             self.cppbqm.add_quadratic(&irow[0], &icol[0], &qdata[0], length)
+    #             self.variables._stop = self.cppbqm.num_variables()
+    #         else:
+    #             raise NotImplementedError
 
 
     @cython.boundscheck(False)
@@ -285,7 +267,7 @@ cdef class cyBQM_template(cyBQMBase):
         if self.variables._is_range():
             if num_variables > self.num_variables():
                 self.resize(num_variables)
-            self.cppbqm.add_quadratic(&quadratic[0, 0], num_variables)
+            self.cppbqm.add_quadratic_from_dense(&quadratic[0, 0], num_variables)
         else:
             raise NotImplementedError
 
@@ -299,18 +281,18 @@ cdef class cyBQM_template(cyBQMBase):
 
         return v
 
-    cpdef Py_ssize_t change_vartype(self, object vartype) except -1:
-        vartype = as_vartype(vartype)
-        if vartype == Vartype.BINARY:
-            self.cppbqm.change_vartype(cppVartype.BINARY)
-        elif vartype == Vartype.SPIN:
-            self.cppbqm.change_vartype(cppVartype.SPIN)
-        else:
-            raise RuntimeError("unknown vartype", vartype)
+    # cpdef Py_ssize_t change_vartype(self, object vartype) except -1:
+    #     vartype = as_vartype(vartype)
+    #     if vartype == Vartype.BINARY:
+    #         self.cppbqm.change_vartype(cppVartype.BINARY)
+    #     elif vartype == Vartype.SPIN:
+    #         self.cppbqm.change_vartype(cppVartype.SPIN)
+    #     else:
+    #         raise RuntimeError("unknown vartype", vartype)
 
-    def clear(self):
-        self.cppbqm.clear()
-        self.variables._clear()
+    # def clear(self):
+    #     self.cppbqm.clear()
+    #     self.variables._clear()
 
     cdef const cppBinaryQuadraticModel[bias_type, index_type]* data(self):
         """Return a pointer to the C++ BinaryQuadraticModel."""
@@ -322,7 +304,7 @@ cdef class cyBQM_template(cyBQMBase):
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef np.float64_t[::1] _energies(self, ConstNumeric[:, ::1] samples, cyVariables labels):
+    def _energies(self, ConstNumeric[:, ::1] samples, cyVariables labels):
         cdef Py_ssize_t num_samples = samples.shape[0]
         cdef Py_ssize_t num_variables = samples.shape[1]
 
@@ -346,19 +328,21 @@ cdef class cyBQM_template(cyBQMBase):
             # offset
             energies[si] = self.cppbqm.offset()
 
-            for ui in range(self.num_variables()):
-                # linear
-                energies[si] += self.cppbqm.linear(ui) * samples[si, bqm_to_sample[ui]];
+            raise NotImplementedError
 
-                span = self.cppbqm.neighborhood(ui)
-                while span.first != span.second and deref(span.first).first < ui:
-                    vi = deref(span.first).first
+            # for ui in range(self.num_variables()):
+            #     # linear
+            #     energies[si] += self.cppbqm.linear(ui) * samples[si, bqm_to_sample[ui]];
 
-                    energies[si] += deref(span.first).second * samples[si, bqm_to_sample[ui]] * samples[si, bqm_to_sample[vi]]
+            #     span = self.cppbqm.neighborhood(ui)
+            #     while span.first != span.second and deref(span.first).first < ui:
+            #         vi = deref(span.first).first
 
-                    inc(span.first)
+            #         energies[si] += deref(span.first).second * samples[si, bqm_to_sample[ui]] * samples[si, bqm_to_sample[vi]]
 
-        return energies
+            #         inc(span.first)
+
+        return np.asarray(energies)
 
     def energies(self, samples_like, dtype=None):
         samples, labels = as_samples(samples_like, labels_type=Variables)
@@ -370,58 +354,60 @@ cdef class cyBQM_template(cyBQMBase):
                 dtype=f'i{samples.dtype.itemsize}' if np.issubdtype(samples.dtype, np.unsignedinteger) else None,
                 )
 
-        # Cython really should be able to figure the type out, but for some reason
-        # it fails, so we just dispatch manually
-        if samples.dtype == np.float64:
-            return np.asarray(self._energies[np.float64_t](samples, labels), dtype=dtype)
-        elif samples.dtype == np.float32:
-            return np.asarray(self._energies[np.float32_t](samples, labels), dtype=dtype)
-        elif samples.dtype == np.int8:
-            return np.asarray(self._energies[np.int8_t](samples, labels), dtype=dtype)
-        elif samples.dtype == np.int16:
-            return np.asarray(self._energies[np.int16_t](samples, labels), dtype=dtype)
-        elif samples.dtype == np.int32:
-            return np.asarray(self._energies[np.int32_t](samples, labels), dtype=dtype)
-        elif samples.dtype == np.int64:
-            return np.asarray(self._energies[np.int64_t](samples, labels), dtype=dtype)
-        else:
-            raise ValueError("unsupported sample dtype")
+        return np.asarray(self._energies(samples, labels), dtype=dtype)
 
-    @classmethod
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    def _from_numpy_vectors(cls,
-                            ConstNumeric[::1] linear,
-                            ConstInteger[::1] irow,
-                            ConstInteger[::1] icol,
-                            ConstNumeric[::1] qdata,
-                            bias_type offset,
-                            object vartype):
-        """Equivalent of from_numpy_vectors with fused types."""
+        # # Cython really should be able to figure the type out, but for some reason
+        # # it fails, so we just dispatch manually
+        # if samples.dtype == np.float64:
+        #     return np.asarray(self._energies[np.float64_t](samples, labels), dtype=dtype)
+        # elif samples.dtype == np.float32:
+        #     return np.asarray(self._energies[np.float32_t](samples, labels), dtype=dtype)
+        # elif samples.dtype == np.int8:
+        #     return np.asarray(self._energies[np.int8_t](samples, labels), dtype=dtype)
+        # elif samples.dtype == np.int16:
+        #     return np.asarray(self._energies[np.int16_t](samples, labels), dtype=dtype)
+        # elif samples.dtype == np.int32:
+        #     return np.asarray(self._energies[np.int32_t](samples, labels), dtype=dtype)
+        # elif samples.dtype == np.int64:
+        #     return np.asarray(self._energies[np.int64_t](samples, labels), dtype=dtype)
+        # else:
+        #     raise ValueError("unsupported sample dtype")
 
-        cdef cyBQM_template bqm = cls(vartype)
+    # @classmethod
+    # @cython.boundscheck(False)
+    # @cython.wraparound(False)
+    # def _from_numpy_vectors(cls,
+    #                         ConstNumeric[::1] linear,
+    #                         ConstInteger[::1] irow,
+    #                         ConstInteger[::1] icol,
+    #                         ConstNumeric[::1] qdata,
+    #                         bias_type offset,
+    #                         object vartype):
+    #     """Equivalent of from_numpy_vectors with fused types."""
 
-        # add the quadratic
-        if not irow.shape[0] == icol.shape[0] == qdata.shape[0]:
-            raise ValueError("quadratic vectors should be equal length")
-        cdef Py_ssize_t length = irow.shape[0]
+    #     cdef cyBQM_template bqm = cls(vartype)
 
-        if length:
-            bqm.cppbqm.add_quadratic(&irow[0], &icol[0], &qdata[0], length)
+    #     # add the quadratic
+    #     if not irow.shape[0] == icol.shape[0] == qdata.shape[0]:
+    #         raise ValueError("quadratic vectors should be equal length")
+    #     cdef Py_ssize_t length = irow.shape[0]
 
-        bqm.variables._stop = bqm.cppbqm.num_variables()
+    #     if length:
+    #         bqm.cppbqm.add_quadratic(&irow[0], &icol[0], &qdata[0], length)
 
-        # add the linear
-        if bqm.num_variables() < linear.shape[0]:
-            bqm.resize(linear.shape[0])
-        cdef Py_ssize_t vi
-        for vi in range(linear.shape[0]):
-            bqm._add_linear(vi, linear[vi])
+    #     bqm.variables._stop = bqm.cppbqm.num_variables()
 
-        # add the offset
-        bqm._add_offset(offset)
+    #     # add the linear
+    #     if bqm.num_variables() < linear.shape[0]:
+    #         bqm.resize(linear.shape[0])
+    #     cdef Py_ssize_t vi
+    #     for vi in range(linear.shape[0]):
+    #         bqm._add_linear(vi, linear[vi])
 
-        return bqm
+    #     # add the offset
+    #     bqm._add_offset(offset)
+
+    #     return bqm
 
     @classmethod
     def from_numpy_vectors(cls, linear, quadratic, offset, vartype,
@@ -503,20 +489,20 @@ cdef class cyBQM_template(cyBQMBase):
     cpdef bint is_linear(self):
         return self.cppbqm.is_linear()
 
-    def iter_neighborhood(self, v):
-        cdef Py_ssize_t vi = self.variables.index(v)
+    # def iter_neighborhood(self, v):
+    #     cdef Py_ssize_t vi = self.variables.index(v)
 
-        cdef Py_ssize_t ui
-        cdef bias_type bias
+    #     cdef Py_ssize_t ui
+    #     cdef bias_type bias
 
-        span = self.cppbqm.neighborhood(vi)
-        while span.first != span.second:
-            ui = deref(span.first).first
-            bias = deref(span.first).second
+    #     span = self.cppbqm.neighborhood(vi)
+    #     while span.first != span.second:
+    #         ui = deref(span.first).first
+    #         bias = deref(span.first).second
 
-            yield self.variables.at(ui), as_numpy_float(bias)
+    #         yield self.variables.at(ui), as_numpy_float(bias)
 
-            inc(span.first)
+    #         inc(span.first)
 
     def iter_quadratic(self):
         it = self.cppbqm.cbegin_quadratic()
@@ -526,8 +512,8 @@ cdef class cyBQM_template(cyBQMBase):
             yield u, v, as_numpy_float(deref(it).bias)
             inc(it)
 
-    cpdef Py_ssize_t nbytes(self, bint capacity = False):
-        return self.cppbqm.nbytes(capacity)
+    # cpdef Py_ssize_t nbytes(self, bint capacity = False):
+    #     return self.cppbqm.nbytes(capacity)
 
     cpdef Py_ssize_t num_interactions(self):
         return self.cppbqm.num_interactions()
@@ -571,45 +557,45 @@ cdef class cyBQM_template(cyBQMBase):
 
         return as_numpy_float(value)
 
-    def reduce_neighborhood(self, u, function, initializer=None):
-        cdef Py_ssize_t ui = self.variables.index(u)
+    # def reduce_neighborhood(self, u, function, initializer=None):
+    #     cdef Py_ssize_t ui = self.variables.index(u)
 
-        if self.cppbqm.num_interactions(ui) == 0 and initializer is None:
-            # feels like this should be a ValueError but python raises
-            # TypeError so...
-            raise TypeError("reduce_neighborhood() on an empty neighbhorhood")
+    #     if self.cppbqm.num_interactions(ui) == 0 and initializer is None:
+    #         # feels like this should be a ValueError but python raises
+    #         # TypeError so...
+    #         raise TypeError("reduce_neighborhood() on an empty neighbhorhood")
 
-        cdef bias_type value, tmp
+    #     cdef bias_type value, tmp
 
-        span = self.cppbqm.neighborhood(ui)
+    #     span = self.cppbqm.neighborhood(ui)
 
-        if initializer is None:
-            value = deref(span.first).second
-            inc(span.first)
-        else:
-            value = initializer
+    #     if initializer is None:
+    #         value = deref(span.first).second
+    #         inc(span.first)
+    #     else:
+    #         value = initializer
 
-        # speed up a few common cases
-        if function is operator.add:
-            while span.first != span.second:
-                value += deref(span.first).second
-                inc(span.first)
-        elif function is max:
-            while span.first != span.second:
-                tmp = deref(span.first).second
-                if tmp > value:
-                    value = tmp
-                inc(span.first)
-        elif function is min:
-            while span.first != span.second:
-                tmp = deref(span.first).second
-                if tmp < value:
-                    value = tmp
-                inc(span.first)
-        else:
-            while span.first != span.second:
-                value = function(value, deref(span.first).second)
-                inc(span.first)
+    #     # speed up a few common cases
+    #     if function is operator.add:
+    #         while span.first != span.second:
+    #             value += deref(span.first).second
+    #             inc(span.first)
+    #     elif function is max:
+    #         while span.first != span.second:
+    #             tmp = deref(span.first).second
+    #             if tmp > value:
+    #                 value = tmp
+    #             inc(span.first)
+    #     elif function is min:
+    #         while span.first != span.second:
+    #             tmp = deref(span.first).second
+    #             if tmp < value:
+    #                 value = tmp
+    #             inc(span.first)
+    #     else:
+    #         while span.first != span.second:
+    #             value = function(value, deref(span.first).second)
+    #             inc(span.first)
 
         return as_numpy_float(value)
 
@@ -667,45 +653,45 @@ cdef class cyBQM_template(cyBQMBase):
         if not self.cppbqm.remove_interaction(ui, vi):
             raise ValueError(f"{u!r} and {v!r} have no interaction")
 
-    def remove_variable(self, v=None):
-        """Remove a variable and its associated interactions.
+    # def remove_variable(self, v=None):
+    #     """Remove a variable and its associated interactions.
 
-        Args:
-            v: The variable to be removed from the binary quadratic model.
+    #     Args:
+    #         v: The variable to be removed from the binary quadratic model.
 
-        Returns:
-            The label of the removed variable.
+    #     Returns:
+    #         The label of the removed variable.
 
-        Raises:
-            ValueError: If the variable does not exist.
+    #     Raises:
+    #         ValueError: If the variable does not exist.
 
-        """
-        if v is None:
-            try:
-                v = self.variables[-1]
-            except IndexError:
-                raise ValueError("cannot pop from an empty model")
+    #     """
+    #     if v is None:
+    #         try:
+    #             v = self.variables[-1]
+    #         except IndexError:
+    #             raise ValueError("cannot pop from an empty model")
 
-        cdef Py_ssize_t vi = self.variables.index(v)
-        cdef Py_ssize_t lasti = self.num_variables() - 1
+    #     cdef Py_ssize_t vi = self.variables.index(v)
+    #     cdef Py_ssize_t lasti = self.num_variables() - 1
 
-        if vi != lasti:
-            # we're removing a variable in the middle of the
-            # underlying adjacency. We do this by "swapping" the last variable
-            # and v, then popping v from the end
-            self.cppbqm.swap_variables(vi, lasti)
+    #     if vi != lasti:
+    #         # we're removing a variable in the middle of the
+    #         # underlying adjacency. We do this by "swapping" the last variable
+    #         # and v, then popping v from the end
+    #         self.cppbqm.swap_variables(vi, lasti)
 
-            # now swap the variable labels
-            last = self.variables.at(lasti)
-            self.variables._relabel({v: last, last: v})
+    #         # now swap the variable labels
+    #         last = self.variables.at(lasti)
+    #         self.variables._relabel({v: last, last: v})
 
-        # remove last from the cppqm and variables
-        self.cppbqm.resize(lasti)
-        tmp = self.variables._pop()
+    #     # remove last from the cppqm and variables
+    #     self.cppbqm.resize(lasti)
+    #     tmp = self.variables._pop()
 
-        assert tmp == v, f"{tmp} == {v}"
+    #     assert tmp == v, f"{tmp} == {v}"
 
-        return v
+    #     return v
 
     cpdef Py_ssize_t resize(self, Py_ssize_t n) except? 0:
         if n < 0:
@@ -727,7 +713,7 @@ cdef class cyBQM_template(cyBQMBase):
 
     def set_linear(self, v, bias_type bias):
         cdef Py_ssize_t vi = self._index(v, permissive=True)
-        self._set_linear(vi, bias)
+        self.cppbqm.set_linear(vi, bias)
 
     def set_quadratic(self, u, v, bias_type bias):
         if u == v:
@@ -737,95 +723,95 @@ cdef class cyBQM_template(cyBQMBase):
         cdef Py_ssize_t vi = self._index(v, permissive=True)
         self.cppbqm.set_quadratic(ui, vi, bias)
 
-    def to_numpy_vectors(self, variable_order=None, *,
-                         sort_indices=False, sort_labels=True,
-                         return_labels=False):
+    # def to_numpy_vectors(self, variable_order=None, *,
+    #                      sort_indices=False, sort_labels=True,
+    #                      return_labels=False):
 
-        cdef Py_ssize_t num_variables = self.cppbqm.num_variables()
-        cdef Py_ssize_t num_interactions = self.cppbqm.num_interactions()
+    #     cdef Py_ssize_t num_variables = self.cppbqm.num_variables()
+    #     cdef Py_ssize_t num_interactions = self.cppbqm.num_interactions()
 
-        # numpy arrays, we will return these
-        ldata = np.empty(num_variables, dtype=self.dtype)
-        irow = np.empty(num_interactions, dtype=self.index_dtype)
-        icol = np.empty(num_interactions, dtype=self.index_dtype)
-        qdata = np.empty(num_interactions, dtype=self.dtype)
+    #     # numpy arrays, we will return these
+    #     ldata = np.empty(num_variables, dtype=self.dtype)
+    #     irow = np.empty(num_interactions, dtype=self.index_dtype)
+    #     icol = np.empty(num_interactions, dtype=self.index_dtype)
+    #     qdata = np.empty(num_interactions, dtype=self.dtype)
 
-        # views into the numpy arrays for faster cython access
-        cdef bias_type[:] ldata_view = ldata
-        cdef index_type[:] irow_view = irow
-        cdef index_type[:] icol_view = icol
-        cdef bias_type[:] qdata_view = qdata
+    #     # views into the numpy arrays for faster cython access
+    #     cdef bias_type[:] ldata_view = ldata
+    #     cdef index_type[:] irow_view = irow
+    #     cdef index_type[:] icol_view = icol
+    #     cdef bias_type[:] qdata_view = qdata
 
-        cdef Py_ssize_t vi
-        cdef Py_ssize_t qi = 0  # index in the quadratic arrays
-        for vi in range(num_variables):
-            span = self.cppbqm.neighborhood(vi)
+    #     cdef Py_ssize_t vi
+    #     cdef Py_ssize_t qi = 0  # index in the quadratic arrays
+    #     for vi in range(num_variables):
+    #         span = self.cppbqm.neighborhood(vi)
 
-            while span.first != span.second and deref(span.first).first < vi:
-                irow_view[qi] = vi
-                icol_view[qi] = deref(span.first).first
-                qdata_view[qi] = deref(span.first).second
+    #         while span.first != span.second and deref(span.first).first < vi:
+    #             irow_view[qi] = vi
+    #             icol_view[qi] = deref(span.first).first
+    #             qdata_view[qi] = deref(span.first).second
 
-                qi += 1
-                inc(span.first)
+    #             qi += 1
+    #             inc(span.first)
 
-        # at this point we have the arrays but they are index-order, NOT the
-        # label-order. So we need to do some fiddling
-        cdef bint is_range = self.variables._is_range()
+    #     # at this point we have the arrays but they are index-order, NOT the
+    #     # label-order. So we need to do some fiddling
+    #     cdef bint is_range = self.variables._is_range()
 
-        cdef Py_ssize_t[:] reindex
-        cdef Py_ssize_t ri
-        if variable_order is not None or (sort_labels and not is_range):
-            if variable_order is None:
-                variable_order = list(self.variables)
-                if sort_labels:
-                    try:
-                        variable_order.sort()
-                    except TypeError:
-                        # can't sort unlike types in py3
-                        pass
+    #     cdef Py_ssize_t[:] reindex
+    #     cdef Py_ssize_t ri
+    #     if variable_order is not None or (sort_labels and not is_range):
+    #         if variable_order is None:
+    #             variable_order = list(self.variables)
+    #             if sort_labels:
+    #                 try:
+    #                     variable_order.sort()
+    #                 except TypeError:
+    #                     # can't sort unlike types in py3
+    #                     pass
 
-            # ok, using the variable_order, calculate the re-index
-            reindex = np.full(num_variables, -1, dtype=np.intp)
-            for ri, v in enumerate(variable_order):
-                vi = self.variables.index(v)
-                reindex[vi] = ri
+    #         # ok, using the variable_order, calculate the re-index
+    #         reindex = np.full(num_variables, -1, dtype=np.intp)
+    #         for ri, v in enumerate(variable_order):
+    #             vi = self.variables.index(v)
+    #             reindex[vi] = ri
 
-                ldata_view[ri] = self.cppbqm.linear(vi)
+    #             ldata_view[ri] = self.cppbqm.linear(vi)
 
-            for qi in range(num_interactions):
-                irow_view[qi] = reindex[irow_view[qi]]
-                icol_view[qi] = reindex[icol_view[qi]]
+    #         for qi in range(num_interactions):
+    #             irow_view[qi] = reindex[irow_view[qi]]
+    #             icol_view[qi] = reindex[icol_view[qi]]
 
-            labels = variable_order
+    #         labels = variable_order
 
-        else:
-            # the fast case! We don't need to do anything except construct the
-            # linear
-            for vi in range(num_variables):
-                ldata_view[vi] = self.cppbqm.linear(vi)
+    #     else:
+    #         # the fast case! We don't need to do anything except construct the
+    #         # linear
+    #         for vi in range(num_variables):
+    #             ldata_view[vi] = self.cppbqm.linear(vi)
 
-            if return_labels:
-                labels = list(self.variables)
+    #         if return_labels:
+    #             labels = list(self.variables)
 
-        if sort_indices:
-            coo_sort(irow, icol, qdata)
+    #     if sort_indices:
+    #         coo_sort(irow, icol, qdata)
 
-        if return_labels:
-            return LabelledBQMVectors(ldata, QuadraticVectors(irow, icol, qdata), self.offset, labels)
-        else:
-            return BQMVectors(ldata, QuadraticVectors(irow, icol, qdata), self.offset)
+    #     if return_labels:
+    #         return LabelledBQMVectors(ldata, QuadraticVectors(irow, icol, qdata), self.offset, labels)
+    #     else:
+    #         return BQMVectors(ldata, QuadraticVectors(irow, icol, qdata), self.offset)
 
-    def _update(self, cyBQM other):
-        # get the reindexing
-        cdef vector[Py_ssize_t] mapping
-        mapping.reserve(other.num_variables())
-        for v in other.variables:
-            mapping.push_back(self.variables.index(v, permissive=True))
+    # def _update(self, cyBQM other):
+    #     # get the reindexing
+    #     cdef vector[Py_ssize_t] mapping
+    #     mapping.reserve(other.num_variables())
+    #     for v in other.variables:
+    #         mapping.push_back(self.variables.index(v, permissive=True))
 
-        self.cppbqm.add_bqm(other.cppbqm, mapping)
+    #     self.cppbqm.add_bqm(other.cppbqm, mapping)
 
-        assert self.variables.size() == self.cppbqm.num_variables()
+    #     assert self.variables.size() == self.cppbqm.num_variables()
 
     def update(self, other):
         try:

@@ -78,6 +78,12 @@ TEST_CASE("BinaryQuadraticModel quadratic iteration") {
         THEN("quadric iteration should return nothing") {
             CHECK(bqm.cbegin_quadratic() == bqm.cend_quadratic());
         }
+
+        THEN("neighborhood iteration should return nothing") {
+            for (std::size_t v = 0; v < bqm.num_variables(); ++v) {
+                CHECK(bqm.cbegin_neighborhood(v) == bqm.cend_neighborhood(v));
+            }
+        }
     }
 
     GIVEN("a linear BQM that was once quadratic") {
@@ -384,16 +390,14 @@ TEMPLATE_TEST_CASE_SIG("Scenario: BinaryQuadraticModel tests", "[qmbase][bqm]",
             REQUIRE_THROWS_AS(bqm.quadratic_at(2, 1), std::out_of_range);
         }
 
-        // THEN("we can iterate over the neighborhood") {
-        //     auto span = bqm.neighborhood(0);
-        //     auto pairs = std::vector<std::pair<std::size_t, Bias>>(span.first, span.second);
-
-        //     REQUIRE(pairs[0].first == 1);
-        //     REQUIRE(pairs[0].second == 2);
-        //     REQUIRE(pairs[1].first == 2);
-        //     REQUIRE(pairs[1].second == 4);
-        //     REQUIRE(pairs.size() == 2);
-        // }
+        THEN("we can iterate over the neighborhood of 0") {
+            std::size_t count = 0;
+            for (auto it = bqm.cbegin_neighborhood(0); it != bqm.cend_neighborhood(0);
+                 ++it, ++count) {
+                CHECK(bqm.quadratic_at(0, it->v) == it->bias);
+            }
+            CHECK(count == 2);
+        }
 
         WHEN("we iterate over the quadratic biases") {
             auto first = bqm.cbegin_quadratic();

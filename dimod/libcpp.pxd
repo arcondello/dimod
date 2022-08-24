@@ -35,7 +35,7 @@ from libcpp.unordered_map cimport unordered_map
 from libcpp.vector cimport vector
 
 
-cdef extern from "dimod/quadratic_model.h" namespace "dimod" nogil:
+cdef extern from "dimod/vartypes.h" namespace "dimod" nogil:
     enum cppVartype "dimod::Vartype":
         BINARY
         SPIN
@@ -52,20 +52,15 @@ cdef extern from "dimod/quadratic_model.h" namespace "dimod" nogil:
         @staticmethod
         Bias min(cppVartype)
 
+cdef extern from "dimod/quadratic_model.h" namespace "dimod" nogil:
+
     cdef cppclass cppBinaryQuadraticModel "dimod::BinaryQuadraticModel" [Bias, Index]:
         ctypedef Bias bias_type
-        ctypedef size_t size_type
         ctypedef Index index_type
-
-        cppclass const_neighborhood_iterator:
-            pair[index_type, bias_type] operator*()
-            const_neighborhood_iterator operator++()
-            const_neighborhood_iterator operator--()
-            bint operator==(const_neighborhood_iterator)
-            bint operator!=(const_neighborhood_iterator)
+        ctypedef size_t size_type
 
         cppclass const_quadratic_iterator:
-            cppclass value_type:
+            struct value_type:
                 index_type u
                 index_type v
                 bias_type bias
@@ -75,109 +70,97 @@ cdef extern from "dimod/quadratic_model.h" namespace "dimod" nogil:
             bint operator==(const_quadratic_iterator&)
             bint operator!=(const_quadratic_iterator&)
 
-        cppBinaryQuadraticModel()
-        cppBinaryQuadraticModel(cppVartype)
-
-        void add_bqm[B, I](const cppBinaryQuadraticModel[B, I]&)
-        void add_bqm[B, I, T](const cppBinaryQuadraticModel[B, I]&, const vector[T]&) except +
-        void add_quadratic(index_type, index_type, bias_type) except +
-        void add_quadratic[T](const T dense[], index_type)
-        void add_quadratic[ItRow, ItCol, ItBias](ItRow, ItCol, ItBias, index_type) except +
+        void add_linear(index_type, bias_type)
+        void add_quadratic(index_type, index_type, bias_type)
         void add_quadratic_back(index_type, index_type, bias_type)
-        index_type add_variable()
+        void add_quadratic_from_dense[T](const T dense[], index_type)
         const_quadratic_iterator cbegin_quadratic()
         const_quadratic_iterator cend_quadratic()
-        void clear()
-        void change_vartype(cppVartype)
         bias_type energy[Iter](Iter sample_start)
         bint is_linear()
-        bias_type& linear(index_type)
-        const bias_type& lower_bound(index_type) const
-        bias_type& offset()
+        bias_type linear(index_type)
+        bias_type lower_bound(index_type)
+        size_type num_interactions()
+        size_type num_interactions(index_type)
+        size_type num_variables()
+        bias_type offset()
         bias_type quadratic(index_type, index_type)
         bias_type quadratic_at(index_type, index_type) except +
-        size_type nbytes()
-        size_type nbytes(bint)
-        pair[const_neighborhood_iterator, const_neighborhood_iterator] neighborhood(index_type)
-        pair[const_neighborhood_iterator, const_neighborhood_iterator] neighborhood(index_type, index_type)
-        size_type num_variables()
-        size_type num_interactions()
-        size_type num_interactions(index_type)
-        bint remove_interaction(index_type, index_type) except +
+        bint remove_interaction(index_type, index_type)
         void resize(index_type)
         void scale(bias_type)
+        void set_linear(index_type, bias_type)
+        void set_offset(bias_type)
         void set_quadratic(index_type, index_type, bias_type) except +
-        void swap_variables(index_type, index_type)
-        const bias_type& upper_bound(index_type) const
-        cppVartype& vartype()
-        cppVartype& vartype(index_type)
+        bias_type upper_bound(index_type)
+        cppVartype vartype()
 
-    cdef cppclass cppQuadraticModel "dimod::QuadraticModel" [Bias, Index]:
-        ctypedef Bias bias_type
-        ctypedef size_t size_type
-        ctypedef Index index_type
+    # cdef cppclass cppQuadraticModel "dimod::QuadraticModel" [Bias, Index]:
+    #     ctypedef Bias bias_type
+    #     ctypedef size_t size_type
+    #     ctypedef Index index_type
 
-        cppclass const_neighborhood_iterator:
-            pair[index_type, bias_type] operator*()
-            const_neighborhood_iterator operator++()
-            const_neighborhood_iterator operator--()
-            bint operator==(const_neighborhood_iterator)
-            bint operator!=(const_neighborhood_iterator)
+    #     cppclass const_neighborhood_iterator:
+    #         pair[index_type, bias_type] operator*()
+    #         const_neighborhood_iterator operator++()
+    #         const_neighborhood_iterator operator--()
+    #         bint operator==(const_neighborhood_iterator)
+    #         bint operator!=(const_neighborhood_iterator)
 
-        cppclass const_quadratic_iterator:
-            cppclass value_type:
-                index_type u
-                index_type v
-                bias_type bias
+    #     cppclass const_quadratic_iterator:
+    #         cppclass value_type:
+    #             index_type u
+    #             index_type v
+    #             bias_type bias
 
-            value_type operator*()
-            const_quadratic_iterator operator++()
-            bint operator==(const_quadratic_iterator&)
-            bint operator!=(const_quadratic_iterator&)
+    #         value_type operator*()
+    #         const_quadratic_iterator operator++()
+    #         bint operator==(const_quadratic_iterator&)
+    #         bint operator!=(const_quadratic_iterator&)
 
-        void add_quadratic(index_type, index_type, bias_type) except +
-        void add_quadratic_back(index_type, index_type, bias_type)
-        index_type add_variable(cppVartype) except+
-        index_type add_variable(cppVartype, bias_type, bias_type) except +
-        const_quadratic_iterator cbegin_quadratic()
-        void change_vartype(cppVartype, index_type) except +
-        const_quadratic_iterator cend_quadratic()
-        void clear()
-        bias_type energy[Iter](Iter sample_start)
-        bint is_linear()
-        bias_type& linear(index_type)
-        const bias_type& lower_bound(index_type) const
-        size_type nbytes()
-        size_type nbytes(bint)
-        pair[const_neighborhood_iterator, const_neighborhood_iterator] neighborhood(size_type)
-        size_type num_variables()
-        size_type num_interactions()
-        size_type num_interactions(index_type)
-        bias_type& offset()
-        bias_type quadratic_at(index_type, index_type) except +
-        bint remove_interaction(index_type, index_type) except +
-        void resize(index_type) except +
-        void scale(bias_type)
-        void set_quadratic(index_type, index_type, bias_type)
-        void swap(cppQuadraticModel&)
-        void swap_variables(index_type, index_type)
-        const bias_type& upper_bound(index_type) const
-        const cppVartype& vartype(index_type)
+    #     void add_quadratic(index_type, index_type, bias_type) except +
+    #     void add_quadratic_back(index_type, index_type, bias_type)
+    #     index_type add_variable(cppVartype) except+
+    #     index_type add_variable(cppVartype, bias_type, bias_type) except +
+    #     const_quadratic_iterator cbegin_quadratic()
+    #     void change_vartype(cppVartype, index_type) except +
+    #     const_quadratic_iterator cend_quadratic()
+    #     void clear()
+    #     bias_type energy[Iter](Iter sample_start)
+    #     bint is_linear()
+    #     bias_type& linear(index_type)
+    #     const bias_type& lower_bound(index_type) const
+    #     size_type nbytes()
+    #     size_type nbytes(bint)
+    #     pair[const_neighborhood_iterator, const_neighborhood_iterator] neighborhood(size_type)
+    #     size_type num_variables()
+    #     size_type num_interactions()
+    #     size_type num_interactions(index_type)
+    #     bias_type& offset()
+    #     bias_type quadratic_at(index_type, index_type) except +
+    #     bint remove_interaction(index_type, index_type) except +
+    #     void resize(index_type) except +
+    #     void scale(bias_type)
+    #     void set_quadratic(index_type, index_type, bias_type)
+    #     void swap(cppQuadraticModel&)
+    #     void swap_variables(index_type, index_type)
+    #     const bias_type& upper_bound(index_type) const
+    #     const cppVartype& vartype(index_type)
 
-cdef extern from "dimod/lp.h" namespace "dimod::lp" nogil:
-    cdef cppclass cppExpression "dimod::lp::Expression" [Bias, Index]:
-        cppQuadraticModel[Bias, Index] model
-        unordered_map[string, Index] labels
-        string name
+# cdef extern from "dimod/lp.h" namespace "dimod::lp" nogil:
+#     cdef cppclass cppExpression "dimod::lp::Expression" [Bias, Index]:
+#         cppQuadraticModel[Bias, Index] model
+#         unordered_map[string, Index] labels
+#         string name
 
-    cdef cppclass cppConstraint "dimod::lp::Constraint" [Bias, Index]:
-        cppExpression[Bias, Index] lhs
-        string sense
-        Bias rhs
+#     cdef cppclass cppConstraint "dimod::lp::Constraint" [Bias, Index]:
+#         cppExpression[Bias, Index] lhs
+#         string sense
+#         Bias rhs
 
-    cdef cppclass cppLPModel "dimod::lp::LPModel" [Bias, Index]:
-        cppExpression[Bias, Index] objective
-        vector[cppConstraint[Bias, Index]] constraints
-        bint minimize
+#     cdef cppclass cppLPModel "dimod::lp::LPModel" [Bias, Index]:
+#         cppExpression[Bias, Index] objective
+#         vector[cppConstraint[Bias, Index]] constraints
+#         bint minimize
 
-    cppLPModel[Bias, Index] cppread_lp "dimod::lp::read" [Bias, Index] (const string) except +
+#     cppLPModel[Bias, Index] cppread_lp "dimod::lp::read" [Bias, Index] (const string) except +
