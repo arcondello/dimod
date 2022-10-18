@@ -209,6 +209,9 @@ class Expression : public abc::QuadraticModelBase<Bias, Index> {
     template <class T>
     void fix_variable(index_type v, T assignment);
 
+    /// Check whether u and v have an interaction
+    bool has_interaction(index_type u,  index_type v) const;
+
     bool has_variable(index_type v) const;
 
     bool is_disjoint(const Expression& other) const;
@@ -411,6 +414,19 @@ void Expression<bias_type, index_type>::fix_variable(index_type v, T assignment)
 }
 
 template <class bias_type, class index_type>
+bool Expression<bias_type, index_type>::has_interaction(index_type u, index_type v) const {
+    auto uit = indices_.find(u);
+    auto vit = indices_.find(v);
+    if (uit == indices_.end() || vit == indices_.end()) {
+        assert(u >= 0 && static_cast<size_type>(u) < parent_->num_variables());
+        assert(v >= 0 && static_cast<size_type>(v) < parent_->num_variables());
+        return 0;
+    }
+
+    return base_type::has_interaction(uit->second, vit->second);
+}
+
+template <class bias_type, class index_type>
 bool Expression<bias_type, index_type>::has_variable(index_type v) const {
     return indices_.count(v);
 }
@@ -541,6 +557,16 @@ void Expression<bias_type, index_type>::reindex_variables(index_type v) {
     }
 
     assert(indices_.size() == variables_.size());
+}
+
+template <class bias_type, class index_type>
+bool Expression<bias_type, index_type>::remove_interaction(index_type u, index_type v) {
+    auto uit = indices_.find(u);
+    auto vit = indices_.find(v);
+    if (uit == indices_.end() || vit == indices_.end()) {
+        return false;
+    }
+    return base_type::remove_interaction(uit->second, vit->second);
 }
 
 template <class bias_type, class index_type>
