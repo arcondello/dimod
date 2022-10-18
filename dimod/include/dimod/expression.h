@@ -274,6 +274,8 @@ class Expression : public abc::QuadraticModelBase<Bias, Index> {
     /// Set the quadratic bias for the given variables.
     void set_quadratic(index_type u, index_type v, bias_type bias);
 
+    bool shares_variables(const Expression& other) const;
+
     void substitute_variable(index_type v, bias_type multiplier, bias_type offset);
 
     /// Return the upper bound on variable ``v``.
@@ -582,6 +584,14 @@ void Expression<bias_type, index_type>::set_linear(index_type v, bias_type bias)
 template <class bias_type, class index_type>
 void Expression<bias_type, index_type>::set_quadratic(index_type u, index_type v, bias_type bias) {
     base_type::set_quadratic(enforce_variable(u), enforce_variable(v), bias);
+}
+
+template <class bias_type, class index_type>
+bool Expression<bias_type, index_type>::shares_variables(const Expression& other) const {
+    for (auto& v : variables_) {
+        if (other.has_variable(v)) return true;  // overlap!
+    }
+    return false;
 }
 
 template <class bias_type, class index_type>
