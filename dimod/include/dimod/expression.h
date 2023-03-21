@@ -419,7 +419,27 @@ void Expression<bias_type, index_type>::clear() {
 template <class bias_type, class index_type>
 template <class T>
 void Expression<bias_type, index_type>::fix_variable(index_type v, T assignment) {
-    throw std::logic_error("not implemented - fix_variable");
+    assert(v >= 0 && static_cast<size_type>(v) < parent_->num_variables());
+
+    auto vit = indices_.find(v);
+    if (vit == indices_.end()) return;  // nothing to fix
+
+    // fix the variable in the underlying model
+    base_type::fix_variable(vit->second, assignment);
+
+    // update the labels
+
+    // remove v from the vector of variables
+    auto start = variables_.erase(variables_.begin() + vit->second);
+
+    // remove v from the mapping of labels to indices
+    indices_.erase(vit);
+
+    // all of the variables with higher index than v need their index updated
+    // in the mapping
+    for (auto it = start; it != variables_.end(); ++it) {
+        indices_[*it] -= 1;
+    }
 }
 
 template <class bias_type, class index_type>
@@ -592,19 +612,26 @@ bool Expression<bias_type, index_type>::remove_interaction(index_type u, index_t
 
 template <class bias_type, class index_type>
 void Expression<bias_type, index_type>::remove_variable(index_type v) {
-    auto vit = indices_.find(v);
-    if (vit == indices_.end()) return;  // nothing to remove
+    assert(v >= 0 && static_cast<size_type>(v) < parent_->num_variables());
 
-    // remove the biases
+    auto vit = indices_.find(v);
+    if (vit == indices_.end()) return;  // nothing to fix
+
+    // remove the variable from the underlying model
     base_type::remove_variable(vit->second);
 
-    // update the indices
-    variables_.erase(variables_.begin() + vit->second);
+    // update the labels
 
-    // indices is no longer valid, so remake
-    indices_.clear();
-    for (size_type ui = 0; ui < variables_.size(); ++ui) {
-        indices_[variables_[ui]] = ui;
+    // remove v from the vector of variables
+    auto start = variables_.erase(variables_.begin() + vit->second);
+
+    // remove v from the mapping of labels to indices
+    indices_.erase(vit);
+
+    // all of the variables with higher index than v need their index updated
+    // in the mapping
+    for (auto it = start; it != variables_.end(); ++it) {
+        indices_[*it] -= 1;
     }
 }
 

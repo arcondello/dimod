@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 import numbers
+import typing
 
 cimport cython
 cimport numpy as np
@@ -166,6 +167,32 @@ cdef class _cyExpression:
     cdef cppExpression[bias_type, index_type]* expression(self) except NULL:
         # Not implemented. To be overwritten by subclasses.
         raise NotImplementedError
+
+    # Overwrite the version that will be inherited from QuadraticViewsMixin
+    # for performance.
+    def fix_variables(self, fixed):
+        """Fix the value of the variables and remove them.
+
+        Args:
+            fixed: A dictionary or an iterable of 2-tuples of variable
+                assignments.
+
+        """
+        if isinstance(fixed, typing.Mapping):
+            fixed = fixed.items()
+
+        expression = self.expression()
+
+        cdef Py_ssize_t vi
+        cdef bias_type assignment
+        for v, assignment in fixed:
+            try:
+                vi = self.parent.variables.index(v)
+            except ValueError:
+                # variable doesn't exist, so we just ignore it
+                continue
+
+            expression.fix_variable(vi, assignment)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
