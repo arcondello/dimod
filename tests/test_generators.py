@@ -1887,6 +1887,7 @@ class TestQuadraticAssignment(unittest.TestCase):
             self.assertEqual(lhs, 0)
 
 
+@unittest.skipUnless(_networkx, "no networkx installed")
 class TestMinVertexColoring(unittest.TestCase):
     def test_chromatic_number(self):
         G = nx.cycle_graph('abcd')
@@ -1898,6 +1899,7 @@ class TestMinVertexColoring(unittest.TestCase):
         )
 
 
+@unittest.skipUnless(_networkx, "no networkx installed")
 class TestVertexColoring(unittest.TestCase):
     def test_single_node(self):
         G = nx.Graph()
@@ -2012,6 +2014,7 @@ class TestMarkovNetwork(unittest.TestCase):
             self.assertAlmostEqual(en, energy)
 
 
+@unittest.skipUnless(_networkx, "no networkx installed")
 @parameterized.parameterized_class(
     'graph',
     [[nx.Graph()],
@@ -2024,8 +2027,8 @@ class TestMarkovNetwork(unittest.TestCase):
      ]
     )
 class TestMatching(unittest.TestCase):
-    def test_matching_bqm(self):
-        bqm = dimod.generators.matching.matching_bqm(self.graph)
+    def test_matching(self):
+        bqm = dimod.generators.matching(self.graph)
 
         # the ground states should be exactly the matchings of G
         sampleset = dimod.ExactSolver().sample(bqm)
@@ -2035,8 +2038,8 @@ class TestMatching(unittest.TestCase):
             self.assertEqual(nx.is_matching(self.graph, edges), energy == 0)
             self.assertTrue(energy == 0 or energy >= 1)
 
-    def test_maximal_matching_bqm(self):
-        bqm = dimod.generators.matching.maximal_matching_bqm(self.graph)
+    def test_maximal_matching(self):
+        bqm = dimod.generators.maximal_matching(self.graph)
 
         # the ground states should be exactly the maximal matchings of G
         sampleset = dimod.ExactSolver().sample(bqm)
@@ -2048,7 +2051,7 @@ class TestMatching(unittest.TestCase):
             self.assertGreaterEqual(energy, 0)
 
     def test_min_maximal_matching_bqm(self):
-        bqm = dimod.generators.matching.min_maximal_matching_bqm(self.graph)
+        bqm = dimod.generators.min_maximal_matching(self.graph)
 
         if len(self.graph) == 0:
             self.assertEqual(len(bqm.linear), 0)
