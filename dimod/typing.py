@@ -26,14 +26,14 @@ try:
     from numpy.typing import ArrayLike, DTypeLike
 except ImportError:
     # support numpy < 1.20
-    ArrayLike = collections.abc.Sequence
-    DTypeLike = typing.Any
+    ArrayLike: typing.TypeAlias = collections.abc.Sequence
+    DTypeLike: typing.TypeAlias = typing.Any
 
 try:
     from numpy.typing import NDArray
 except ImportError:
     # support numpy < 1.21
-    NDArray = collections.abc.Sequence
+    NDArray: typing.TypeAlias = collections.abc.Sequence
 
 
 __all__ = ['Bias',
@@ -47,7 +47,7 @@ __all__ = ['Bias',
 
 # use float for python types, https://www.python.org/dev/peps/pep-0484/#the-numeric-tower
 # exclude np.complexfloating from numpy types
-Bias = typing.Union[float, np.floating, np.integer]
+Bias: typing.TypeAlias = typing.Union[float, np.floating, np.integer]
 """A :obj:`~typing.Union` representing objects that can be used as biases.
 
 This includes:
@@ -62,7 +62,7 @@ This includes:
 # a typing class is a pain accross our supported Python versions. In the future
 # we should handle it
 
-Variable = collections.abc.Hashable
+Variable: typing.TypeAlias = collections.abc.Hashable
 """Objects that can be used as variable labels.
 
 .. note::
@@ -74,7 +74,7 @@ Variable = collections.abc.Hashable
 """
 
 
-GraphLike = typing.Union[
+GraphLike: typing.TypeAlias = typing.Union[
     int,  # number of nodes
     tuple[
         collections.abc.Collection[Variable],
@@ -98,9 +98,9 @@ try:
 except ImportError:
     pass
 else:
-    GraphLike = typing.Union[GraphLike, nx.Graph]
+    GraphLike: typing.TypeAlias = typing.Union[GraphLike, nx.Graph]
 
-Polynomial = collections.abc.Mapping[collections.abc.Sequence[Variable], Bias]
+Polynomial: typing.TypeAlias = collections.abc.Mapping[collections.abc.Sequence[Variable], Bias]
 """A polynomial represented by a mapping."""
 
 
@@ -131,7 +131,7 @@ class DQMVectors(typing.NamedTuple):
     offset: Bias
 
 
-SampleLike = typing.Union[
+SampleLike: typing.TypeAlias = typing.Union[
     collections.abc.Sequence[Bias],
     collections.abc.Mapping[Variable, Bias],
     tuple[collections.abc.Sequence[Bias], collections.abc.Sequence[Variable]],
@@ -155,7 +155,7 @@ NumPy array_like_ is a very flexible definition.
 """
 
 
-SamplesLike = typing.Union[
+SamplesLike: typing.TypeAlias = typing.Union[
     SampleLike,
     collections.abc.Sequence[collections.abc.Sequence[Bias]],  # 2d array
     tuple[collections.abc.Sequence[collections.abc.Sequence[Bias]], collections.abc.Sequence[Variable]],
