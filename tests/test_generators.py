@@ -13,20 +13,13 @@
 #    limitations under the License.
 
 import unittest
-import unittest.mock
 
 import dimod
 import itertools
 
+import networkx as nx
 import numpy as np
 import parameterized
-
-try:
-    import networkx as nx
-except ImportError:
-    _networkx = False
-else:
-    _networkx = True
 
 # TODO: update to dwave-graphs once released
 try:
@@ -248,7 +241,6 @@ class TestChimeraAnticluster(unittest.TestCase):
                 self.assertIn(j, bqm.adj[i])
                 self.assertIn(bqm.adj[i][j], (-1, 1))
 
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_multitile(self):
         bqm = dimod.generators.chimera_anticluster(2, multiplier=4)
 
@@ -322,7 +314,6 @@ class TestChimeraAnticluster(unittest.TestCase):
             bqm = dimod.generators.chimera_anticluster(0, cls=6)
 
 
-@unittest.skipUnless(_networkx, "no networkx installed")
 class TestFCL(unittest.TestCase):
 
     def setUp(self):
@@ -865,7 +856,6 @@ class TestIndependentSet(unittest.TestCase):
         self.assertEqual(bqm.offset, 0)
         self.assertIs(bqm.vartype, dimod.BINARY)
 
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_edges_networkx(self):
         G = nx.complete_graph(3)
         bqm = dimod.generators.independent_set(G.edges)
@@ -881,7 +871,6 @@ class TestIndependentSet(unittest.TestCase):
         self.assertEqual(bqm.offset, 0)
         self.assertIs(bqm.vartype, dimod.BINARY)
 
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_edges_and_nodes_networkx(self):
         G = nx.complete_graph(3)
         G.add_node(3)
@@ -895,7 +884,6 @@ class TestIndependentSet(unittest.TestCase):
         self.assertEqual(dimod.generators.independent_set([]).shape, (0, 0))
         self.assertEqual(dimod.generators.independent_set([], []).shape, (0, 0))
 
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_empty_networkx(self):
         G = nx.Graph()
         self.assertEqual(dimod.generators.independent_set(G.edges).shape, (0, 0))
@@ -930,7 +918,6 @@ class TestMaximumIndependentSet(unittest.TestCase):
         self.assertEqual(bqm.offset, 0)
         self.assertIs(bqm.vartype, dimod.BINARY)
 
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_edges_networkx(self):
         G = nx.complete_graph(3)
         bqm = dimod.generators.maximum_independent_set(G.edges)
@@ -946,7 +933,6 @@ class TestMaximumIndependentSet(unittest.TestCase):
         self.assertEqual(bqm.offset, 0)
         self.assertIs(bqm.vartype, dimod.BINARY)
 
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_edges_and_nodes_networkx(self):
         G = nx.complete_graph(3)
         G.add_node(3)
@@ -960,7 +946,6 @@ class TestMaximumIndependentSet(unittest.TestCase):
         self.assertEqual(dimod.generators.maximum_independent_set([]).shape, (0, 0))
         self.assertEqual(dimod.generators.maximum_independent_set([], []).shape, (0, 0))
 
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_empty_networkx(self):
         G = nx.Graph()
         self.assertEqual(dimod.generators.maximum_independent_set(G.edges).shape, (0, 0))
@@ -1012,7 +997,6 @@ class TestMaximumWeightIndependentSet(unittest.TestCase):
         configs = {tuple(sample[v] for v in range(3)) for sample in sampleset.lowest().samples()}
         self.assertEqual(configs, {(0, 1, 0), (1, 0, 1)})
 
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_functional_networkx(self):
         G = nx.complete_graph(3)
         G.add_nodes_from([0, 2], weight=.5)
@@ -1029,7 +1013,6 @@ class TestMaximumWeightIndependentSet(unittest.TestCase):
         self.assertEqual(dimod.generators.maximum_weight_independent_set([]).shape, (0, 0))
         self.assertEqual(dimod.generators.maximum_weight_independent_set([], []).shape, (0, 0))
 
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_empty_networkx(self):
         G = nx.Graph()
         self.assertEqual(dimod.generators.maximum_weight_independent_set(G.edges).shape, (0, 0))
@@ -1208,7 +1191,7 @@ class TestMagicSquares(unittest.TestCase):
                     else:
                         self.assertEqual(term, 24)
 
-@unittest.skipUnless(_networkx, "no networkx installed")
+
 class TestMIMO(unittest.TestCase):
 
     def setUp(self):
@@ -1887,7 +1870,6 @@ class TestQuadraticAssignment(unittest.TestCase):
             self.assertEqual(lhs, 0)
 
 
-@unittest.skipUnless(_networkx, "no networkx installed")
 class TestMinVertexColoring(unittest.TestCase):
     def test_chromatic_number(self):
         G = nx.cycle_graph('abcd')
@@ -1899,7 +1881,6 @@ class TestMinVertexColoring(unittest.TestCase):
         )
 
 
-@unittest.skipUnless(_networkx, "no networkx installed")
 class TestVertexColoring(unittest.TestCase):
     def test_single_node(self):
         G = nx.Graph()
@@ -2014,7 +1995,6 @@ class TestMarkovNetwork(unittest.TestCase):
             self.assertAlmostEqual(en, energy)
 
 
-@unittest.skipUnless(_networkx, "no networkx installed")
 @parameterized.parameterized_class(
     'graph',
     [[nx.Graph()],
