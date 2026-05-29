@@ -12,14 +12,15 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-import unittest
-
-import dimod
 import itertools
+import math
+import unittest
 
 import networkx as nx
 import numpy as np
 import parameterized
+
+import dimod
 
 # TODO: update to dwave-graphs once released
 try:
@@ -2062,6 +2063,68 @@ class TestMatching(unittest.TestCase):
             if energy != sampleset.first.energy:
                 if nx.is_maximal_matching(self.graph, edges):
                     self.assertGreater(len(edges), cardinality)
+
+
+class TestPartitioning(unittest.TestCase):
+    def get_partitions(self, cqm):
+        # copied from: :meth:`dwave.graphs.algorithms.partition.partition`.
+
+        sampler = dimod.ExactCQMSolver()
+        response = sampler.sample_cqm(cqm)
+        possible_partitions = response.filter(lambda d: d.is_feasible)
+
+        if not possible_partitions:
+            return {}
+
+        indicators = (key for key, value in possible_partitions.first.sample.items() if math.isclose(value, 1.))
+        node_partition = {key[0]: key[1] for key in indicators}
+        return node_partition
+
+    def test_edge_cases(self):
+        G = nx.Graph()
+        cqm = dimod.generators.partition.graph_partition(G, num_partitions=2)
+        node_partitions = self.get_partitions(cqm)
+        self.assertTrue(node_partitions == {})
+
+    def test_typical_cases(self):
+        G = nx.complete_graph(8)
+        cqm = dimod.generators.partition.graph_partition(G, num_partitions=4)
+        node_partitions = self.get_partitions(cqm)
+        for i in range(4):
+            self.assertEqual(sum(x == i for x in node_partitions.values()), 2) # 4 equally sized subsets
+
+        cqm = dimod.generators.partition.graph_partition(8, num_partitions=4)
+        node_partitions2 = self.get_partitions(cqm)
+        self.assertEqual(node_partitions, node_partitions2)
+
+        G = nx.complete_graph(10)
+        cqm = dimod.generators.partition.graph_partition(G, num_partitions=2)
+        node_partitions = self.get_partitions(cqm)
+        self.assertEqual(sum(x == 0 for x in node_partitions.values()), 5)  # half of the nodes in subset '0'
+
+        nx.set_edge_attributes(G, 1, 'weight')
+        cqm = dimod.generators.partition.graph_partition(G, num_partitions=2)
+        node_partitions = self.get_partitions(cqm)
+        self.assertEqual(sum(x == 0 for x in node_partitions.values()), 5)  # half of the nodes in subset '0'
+
+        G = nx.Graph()
+        G.add_edges_from([(0, 1), (0, 2), (1, 2), (1, 3), (3, 4), (2, 4)])
+        cqm = dimod.generators.partition.graph_partition(G, num_partitions=2)
+        node_partitions = self.get_partitions(cqm)
+        self.assertIn(sum(x == 0 for x in node_partitions.values()), (2, 3)) # either 2 or 3 nodes in subset '0' (ditto '1')
+
+        G = nx.Graph()
+        G.add_edges_from([(0, 1), (0, 2), (1, 2), (2, 3), (3, 4), (3, 5), (4, 5)])
+        cqm = dimod.generators.partition.graph_partition(G, num_partitions=2)
+        node_partitions = self.get_partitions(cqm)
+        self.assertTrue(node_partitions[0] == node_partitions[1] == node_partitions[2])
+        self.assertTrue(node_partitions[3] == node_partitions[4] == node_partitions[5])
+
+        nx.set_edge_attributes(G, values=1, name='weight')
+        nx.set_edge_attributes(G, values={(2, 3): 100}, name='weight')
+        cqm = dimod.generators.partition.graph_partition(G, num_partitions=2)
+        node_partitions = self.get_partitions(cqm)
+        self.assertEqual(node_partitions[2], node_partitions[3]) # weight edges are respected
 
 
 class TestTSPQUBO(unittest.TestCase):
