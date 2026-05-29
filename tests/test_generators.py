@@ -14,6 +14,7 @@
 
 import itertools
 import math
+import operator
 import unittest
 
 import networkx as nx
@@ -2125,6 +2126,82 @@ class TestPartitioning(unittest.TestCase):
         cqm = dimod.generators.partition.graph_partition(G, num_partitions=2)
         node_partitions = self.get_partitions(cqm)
         self.assertEqual(node_partitions[2], node_partitions[3]) # weight edges are respected
+
+
+class TestSocial(unittest.TestCase):
+    def structural_imbalance(self, graph):
+        # see: :meth:`dwave.graphs.social.structural_imbalance`.
+
+        bqm = dimod.generators.social.structural_imbalance(graph)
+
+        # use the exact solver to find low energy states
+        sampler = dimod.ExactSolver()
+        response = sampler.sample(bqm)
+
+        # we want the lowest energy sample
+        sample = response.first.sample
+
+        # spins determine the color
+        colors = {v: (spin + 1) // 2 for v, spin in sample.items()}
+        return colors
+
+    def check_bicolor(self, colors):
+        # colors should be ints and either 0 or 1
+        for c in colors.values():
+            self.assertIn(c, (0, 1))
+
+    def all_eq(self, l):
+        return all(itertools.starmap(operator.eq, zip(l, l[1:])))
+
+    def test_structural_imbalance_basic(self):
+        blueteam = ['Alice', 'Bob', 'Carol']
+        redteam0 = ['Eve']
+        redteam1 = ['Mallory', 'Trudy']
+
+        S = nx.Graph()
+        for p0, p1 in itertools.combinations(blueteam, 2):
+            S.add_edge(p0, p1, sign=1)
+
+        S.add_edge(*redteam1, sign=1)
+        for p0 in blueteam:
+            for p1 in redteam0:
+                S.add_edge(p0, p1, sign=-1)
+            for p1 in redteam1:
+                S.add_edge(p0, p1, sign=-1)
+
+        colors = self.structural_imbalance(S)
+        self.check_bicolor(colors)
+
+        # blue team is one color, and red team another
+        self.assertTrue(self.all_eq([colors[n] for n in blueteam]))
+        self.assertTrue(self.all_eq([colors[n] for n in (redteam0 + redteam1)]))
+        self.assertNotEqual(colors[blueteam[0]], colors[redteam0[0]])
+
+        greenteam = ['Ted']
+        for p0 in set(S.nodes):
+            for p1 in greenteam:
+                S.add_edge(p0, p1, sign=1)
+
+        colors = self.structural_imbalance(S)
+        self.check_bicolor(colors)
+
+    def test_non_nx_graph(self):
+        with self.assertRaises(ValueError):
+            dimod.generators.social.structural_imbalance({'a': 1})
+
+    def test_invalid_graph(self):
+        S = nx.Graph()
+        S.add_edge('Alice', 'Bob')
+
+        with self.assertRaises(ValueError):
+            dimod.generators.social.structural_imbalance(S)
+
+    def test_frustrated_hostile_edge(self):
+        S = nx.florentine_families_graph()
+        nx.set_edge_attributes(S, -1, 'sign')
+
+        colors = self.structural_imbalance(S)
+        self.check_bicolor(colors)
 
 
 class TestTSPQUBO(unittest.TestCase):
