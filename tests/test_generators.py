@@ -2204,10 +2204,10 @@ class TestSocial(unittest.TestCase):
         self.check_bicolor(colors)
 
 
-class TestTSPQUBO(unittest.TestCase):
+class TestTSP(unittest.TestCase):
     def test_empty(self):
-        Q = dimod.generators.tsp.traveling_salesperson_qubo(nx.Graph())
-        self.assertEqual(Q, {})
+        bqm = dimod.generators.tsp.traveling_salesperson(nx.Graph())
+        self.assertEqual(bqm.to_qubo(), ({}, 0))
 
     def test_k3(self):
         # 3cycle so all paths are equally good
@@ -2216,8 +2216,7 @@ class TestTSPQUBO(unittest.TestCase):
                                    ('b', 'c', 1.0),
                                    ('a', 'c', 2.0)])
 
-        Q = dimod.generators.tsp.traveling_salesperson_qubo(G, lagrange=10)
-        bqm = dimod.BinaryQuadraticModel.from_qubo(Q)
+        bqm = dimod.generators.tsp.traveling_salesperson(G, lagrange=10)
 
         # all routes are min weight
         min_routes = list(itertools.permutations(G.nodes))
@@ -2251,8 +2250,7 @@ class TestTSPQUBO(unittest.TestCase):
                                    ('a', 'c', 2.0),
                                    ('c', 'a', 2.0)])
 
-        Q = dimod.generators.tsp.traveling_salesperson_qubo(G, lagrange=10)
-        bqm = dimod.BinaryQuadraticModel.from_qubo(Q)
+        bqm = dimod.generators.tsp.traveling_salesperson(G, lagrange=10)
 
         # all routes are min weight
         min_routes = list(itertools.permutations(G.nodes))
@@ -2284,7 +2282,7 @@ class TestTSPQUBO(unittest.TestCase):
             ('b', 'c', 1.0),
             ('a', 'c', 2.0),
         ])
-        Q1 = dimod.generators.tsp.traveling_salesperson_qubo(G1, lagrange=10)
+        bqm1 = dimod.generators.tsp.traveling_salesperson(G1, lagrange=10)
 
         G2 = nx.Graph()
         G2.add_weighted_edges_from([
@@ -2292,9 +2290,9 @@ class TestTSPQUBO(unittest.TestCase):
             ('a', 'c', 2.0),
         ])
         # make sure that missing_edge_weight gets applied correctly
-        Q2 = dimod.generators.tsp.traveling_salesperson_qubo(G2, lagrange=10, missing_edge_weight=1.0)
+        bqm2 = dimod.generators.tsp.traveling_salesperson(G2, lagrange=10, missing_edge_weight=1.0)
 
-        self.assertDictEqual(Q1, Q2)
+        self.assertEqual(bqm1, bqm2)
 
     def test_digraph_missing_edges(self):
         G1 = nx.DiGraph()
@@ -2306,7 +2304,7 @@ class TestTSPQUBO(unittest.TestCase):
             ('a', 'c', 2.0),
             ('c', 'a', 2.0),
         ])
-        Q1 = dimod.generators.tsp.traveling_salesperson_qubo(G1, lagrange=10)
+        bqm1 = dimod.generators.tsp.traveling_salesperson(G1, lagrange=10)
 
         G2 = nx.DiGraph()
         G2.add_weighted_edges_from([
@@ -2318,9 +2316,9 @@ class TestTSPQUBO(unittest.TestCase):
         ])
 
         # make sure that missing_edge_weight gets applied correctly
-        Q2 = dimod.generators.tsp.traveling_salesperson_qubo(G2, lagrange=10, missing_edge_weight=1.0)
+        bqm2 = dimod.generators.tsp.traveling_salesperson(G2, lagrange=10, missing_edge_weight=1.0)
 
-        self.assertDictEqual(Q1, Q2)
+        self.assertEqual(bqm1, bqm2)
 
     def test_k4_equal_weights(self):
         # k5 with all equal weights so all paths are equally good
@@ -2328,8 +2326,7 @@ class TestTSPQUBO(unittest.TestCase):
         G.add_weighted_edges_from((u, v, .5)
                                   for u, v in itertools.combinations(range(4), 2))
 
-        Q = dimod.generators.tsp.traveling_salesperson_qubo(G, lagrange=10)
-        bqm = dimod.BinaryQuadraticModel.from_qubo(Q)
+        bqm = dimod.generators.tsp.traveling_salesperson(G, lagrange=10)
 
         # all routes are min weight
         min_routes = list(itertools.permutations(G.nodes))
@@ -2364,8 +2361,7 @@ class TestTSPQUBO(unittest.TestCase):
                                    (0, 2, 2),
                                    (1, 3, 2)])
 
-        Q = dimod.generators.tsp.traveling_salesperson_qubo(G, lagrange=10)
-        bqm = dimod.BinaryQuadraticModel.from_qubo(Q)
+        bqm = dimod.generators.tsp.traveling_salesperson(G, lagrange=10)
 
         # good routes won't have 0<->2 or 1<->3
         min_routes = [(0, 1, 2, 3),
@@ -2405,19 +2401,19 @@ class TestTSPQUBO(unittest.TestCase):
 
         lagrange = 5.0
 
-        Q = dimod.generators.tsp.traveling_salesperson_qubo(G, lagrange, 'weight')
+        bqm = dimod.generators.tsp.traveling_salesperson(G, lagrange, 'weight')
 
         N = G.number_of_nodes()
         correct_sum = G.size('weight')*2*N-2*N*N*lagrange+2*N*N*(N-1)*lagrange
 
-        actual_sum = sum(Q.values())
+        actual_sum = sum(bqm.linear.values()) + sum(bqm.quadratic.values())
 
         self.assertEqual(correct_sum, actual_sum)
 
     def test_exceptions(self):
         G = nx.Graph([(0, 1)])
         with self.assertRaises(ValueError):
-            dimod.generators.tsp.traveling_salesperson_qubo(G)
+            dimod.generators.tsp.traveling_salesperson(G)
 
     def test_docstring_size(self):
         # in the docstring we state the size of the resulting BQM, this checks
@@ -2427,8 +2423,7 @@ class TestTSPQUBO(unittest.TestCase):
             G.add_weighted_edges_from((u, v, .5)
                                       for u, v
                                       in itertools.combinations(range(n), 2))
-            Q = dimod.generators.tsp.traveling_salesperson_qubo(G)
-            bqm = dimod.BinaryQuadraticModel.from_qubo(Q)
+            bqm = dimod.generators.tsp.traveling_salesperson(G)
 
             self.assertEqual(len(bqm), n**2)
             self.assertEqual(len(bqm.quadratic), 2*n*n*(n - 1))
