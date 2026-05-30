@@ -2205,6 +2205,25 @@ class TestSocial(unittest.TestCase):
 
 
 class TestTSP(unittest.TestCase):
+    def check_routes(self, bqm, min_routes, sampleset):
+        ground_energy = sampleset.first.energy
+
+        # all possible routes are equally good
+        for route in min_routes:
+            sample = {v: 0 for v in bqm.variables}
+            for idx, city in enumerate(route):
+                sample[(city, idx)] = 1
+            self.assertAlmostEqual(bqm.energy(sample), ground_energy)
+
+        # all min-energy solutions are valid routes
+        ground_count = 0
+        for sample, energy in sampleset.data(['sample', 'energy']):
+            if abs(energy - ground_energy) > .001:
+                break
+            ground_count += 1
+
+        self.assertEqual(ground_count, len(min_routes))
+
     def test_empty(self):
         bqm = dimod.generators.tsp.traveling_salesperson(nx.Graph())
         self.assertEqual(bqm.to_qubo(), ({}, 0))
@@ -2223,23 +2242,8 @@ class TestTSP(unittest.TestCase):
 
         # get the min energy of the qubo
         sampleset = dimod.ExactSolver().sample(bqm)
-        ground_energy = sampleset.first.energy
 
-        # all possible routes are equally good
-        for route in min_routes:
-            sample = {v: 0 for v in bqm.variables}
-            for idx, city in enumerate(route):
-                sample[(city, idx)] = 1
-            self.assertAlmostEqual(bqm.energy(sample), ground_energy)
-
-        # all min-energy solutions are valid routes
-        ground_count = 0
-        for sample, energy in sampleset.data(['sample', 'energy']):
-            if abs(energy - ground_energy) > .001:
-                break
-            ground_count += 1
-
-        self.assertEqual(ground_count, len(min_routes))
+        self.check_routes(bqm, min_routes, sampleset)
 
     def test_k3_bidirectional(self):
         G = nx.DiGraph()
@@ -2257,23 +2261,8 @@ class TestTSP(unittest.TestCase):
 
         # get the min energy of the qubo
         sampleset = dimod.ExactSolver().sample(bqm)
-        ground_energy = sampleset.first.energy
 
-        # all possible routes are equally good
-        for route in min_routes:
-            sample = {v: 0 for v in bqm.variables}
-            for idx, city in enumerate(route):
-                sample[(city, idx)] = 1
-            self.assertAlmostEqual(bqm.energy(sample), ground_energy)
-
-        # all min-energy solutions are valid routes
-        ground_count = 0
-        for sample, energy in sampleset.data(['sample', 'energy']):
-            if abs(energy - ground_energy) > .001:
-                break
-            ground_count += 1
-
-        self.assertEqual(ground_count, len(min_routes))
+        self.check_routes(bqm, min_routes, sampleset)
 
     def test_graph_missing_edges(self):
         G1 = nx.Graph()
@@ -2333,23 +2322,8 @@ class TestTSP(unittest.TestCase):
 
         # get the min energy of the qubo
         sampleset = dimod.ExactSolver().sample(bqm)
-        ground_energy = sampleset.first.energy
 
-        # all possible routes are equally good
-        for route in min_routes:
-            sample = {v: 0 for v in bqm.variables}
-            for idx, city in enumerate(route):
-                sample[(city, idx)] = 1
-            self.assertAlmostEqual(bqm.energy(sample), ground_energy)
-
-        # all min-energy solutions are valid routes
-        ground_count = 0
-        for sample, energy in sampleset.data(['sample', 'energy']):
-            if abs(energy - ground_energy) > .001:
-                break
-            ground_count += 1
-
-        self.assertEqual(ground_count, len(min_routes))
+        self.check_routes(bqm, min_routes, sampleset)
 
     def test_k4(self):
         # good routes are 0,1,2,3 or 3,2,1,0 (and their rotations)
@@ -2375,23 +2349,8 @@ class TestTSP(unittest.TestCase):
 
         # get the min energy of the qubo
         sampleset = dimod.ExactSolver().sample(bqm)
-        ground_energy = sampleset.first.energy
 
-        # all possible routes are equally good
-        for route in min_routes:
-            sample = {v: 0 for v in bqm.variables}
-            for idx, city in enumerate(route):
-                sample[(city, idx)] = 1
-            self.assertAlmostEqual(bqm.energy(sample), ground_energy)
-
-        # all min-energy solutions are valid routes
-        ground_count = 0
-        for sample, energy in sampleset.data(['sample', 'energy']):
-            if abs(energy - ground_energy) > .001:
-                break
-            ground_count += 1
-
-        self.assertEqual(ground_count, len(min_routes))
+        self.check_routes(bqm, min_routes, sampleset)
 
     def test_weighted_complete_graph(self):
         G = nx.Graph()
