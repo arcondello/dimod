@@ -32,6 +32,7 @@ Constraints
    binary_encoding
    combinations
    fulladder_gate
+   graph_partition
    halfadder_gate
    multiplication_circuit
    or_gate
@@ -47,9 +48,13 @@ Optimization
    coordinated_multipoint
    independent_set
    knapsack
+   matching
+   maximal_matching
    maximum_independent_set
    maximum_weight_independent_set
    mimo
+   min_maximal_matching
+   min_vertex_coloring
    multi_knapsack
    quadratic_assignment
    quadratic_knapsack
@@ -57,6 +62,9 @@ Optimization
    random_bin_packing
    random_knapsack
    random_multi_knapsack
+   structural_imbalance
+   traveling_salesperson
+   vertex_coloring
 
 Random
 ======
@@ -67,6 +75,7 @@ Random
    doped
    gnm_random_bqm
    gnp_random_bqm
+   markov_network
    randint
    random_2in4sat
    random_bin_packing
