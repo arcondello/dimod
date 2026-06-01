@@ -200,7 +200,7 @@ def min_vertex_coloring(graph: GraphLike,
         weights = [p / (num_penalized + 1) for p in range(1, num_penalized + 1)]
 
         for p, c in zip(weights, range(chromatic_lb, chromatic_ub)):
-            for v in bqm.variables:
+            for v in graph.nodes:
                 bqm.linear[(v, c)] += p
 
     return bqm

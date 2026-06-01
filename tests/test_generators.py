@@ -1882,6 +1882,14 @@ class TestMinVertexColoring(unittest.TestCase):
             dimod.generators.coloring.vertex_coloring(G, range(2))
         )
 
+    @parameterized.parameterized.expand([
+        (nx.path_graph(5), ),
+        (nx.cycle_graph(5), ),
+        (nx.complete_graph(3), ),
+    ])
+    def test_smoke(self, G):
+        dimod.generators.min_vertex_coloring(G)
+
 
 class TestVertexColoring(unittest.TestCase):
     def test_single_node(self):
