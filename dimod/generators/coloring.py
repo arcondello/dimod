@@ -206,7 +206,8 @@ def min_vertex_coloring(graph: GraphLike,
     return bqm
 
 
-def is_cycle(G: 'nx.Graph') -> bool:
+@graph_argument('G', as_networkx=True)
+def is_cycle(G: GraphLike) -> bool:
     """Determines whether the given graph is a cycle or circle graph.
 
     A cycle graph or circular graph is a graph that consists of a single cycle.
