@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    To avoid ``@graph_argument(..., as_networkx=True)`` failing during
+    import/compile time, defer ``networkx`` checks to the decorated function
+    run time.

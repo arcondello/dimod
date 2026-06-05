@@ -23,6 +23,11 @@ from dimod.exceptions import BinaryQuadraticModelStructureError
 from dimod.utilities import new_variable_label
 from dimod.vartypes import as_vartype
 
+try:
+    import networkx
+except ImportError:
+    networkx = None
+
 __all__ = ['nonblocking_sample_method',
            'bqm_index_labels',
            'bqm_index_labelled_input'
@@ -257,14 +262,6 @@ def graph_argument(*arg_names, **options):
         msg = "graph_argument() for an unexpected keyword argument '{}'".format(key)
         raise TypeError(msg)
 
-    # if user asks for a nx graph, we require nx
-    if as_networkx:
-        try:
-            import networkx as nx
-        except ImportError:
-            raise RuntimeError("graph_argument() with 'as_networkx=True' "
-                               "requires NetworkX installed")
-
     def _graph_arg(f):
         argspec = inspect.getfullargspec(f)
 
@@ -274,9 +271,14 @@ def graph_argument(*arg_names, **options):
             except KeyError:
                 raise TypeError('Graph argument missing')
 
+            # if user asks for a nx graph, we require nx
+            if as_networkx and not networkx:
+                raise RuntimeError("graph_argument() with 'as_networkx=True' "
+                                   "requires NetworkX installed")
+
             if hasattr(G, 'edges') and hasattr(G, 'nodes'):
                 # networkx or perhaps a named tuple
-                if as_networkx and isinstance(G, nx.Graph):
+                if as_networkx and isinstance(G, networkx.Graph):
                     # short-circuit the conversion to nx graph
                     return
 
@@ -321,7 +323,7 @@ def graph_argument(*arg_names, **options):
 
             if as_networkx:
                 nodes, edges = kwargs[name]
-                G = nx.Graph()
+                G = networkx.Graph()
                 G.add_nodes_from(nodes)
                 G.add_edges_from(edges)
                 kwargs[name] = G
