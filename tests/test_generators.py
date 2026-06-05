@@ -17,9 +17,16 @@ import math
 import operator
 import unittest
 
-import networkx as nx
 import numpy as np
 import parameterized
+
+try:
+    import networkx as nx
+except ImportError:
+    _nx = False
+    nx = unittest.mock.Mock()
+else:
+    _nx = True
 
 import dimod
 
@@ -316,6 +323,7 @@ class TestChimeraAnticluster(unittest.TestCase):
             bqm = dimod.generators.chimera_anticluster(0, cls=6)
 
 
+@unittest.skipUnless(_nx, "networkx required")
 class TestFCL(unittest.TestCase):
 
     def setUp(self):
@@ -858,6 +866,7 @@ class TestIndependentSet(unittest.TestCase):
         self.assertEqual(bqm.offset, 0)
         self.assertIs(bqm.vartype, dimod.BINARY)
 
+    @unittest.skipUnless(_nx, "networkx required")
     def test_edges_networkx(self):
         G = nx.complete_graph(3)
         bqm = dimod.generators.independent_set(G.edges)
@@ -873,6 +882,7 @@ class TestIndependentSet(unittest.TestCase):
         self.assertEqual(bqm.offset, 0)
         self.assertIs(bqm.vartype, dimod.BINARY)
 
+    @unittest.skipUnless(_nx, "networkx required")
     def test_edges_and_nodes_networkx(self):
         G = nx.complete_graph(3)
         G.add_node(3)
@@ -886,6 +896,7 @@ class TestIndependentSet(unittest.TestCase):
         self.assertEqual(dimod.generators.independent_set([]).shape, (0, 0))
         self.assertEqual(dimod.generators.independent_set([], []).shape, (0, 0))
 
+    @unittest.skipUnless(_nx, "networkx required")
     def test_empty_networkx(self):
         G = nx.Graph()
         self.assertEqual(dimod.generators.independent_set(G.edges).shape, (0, 0))
@@ -920,6 +931,7 @@ class TestMaximumIndependentSet(unittest.TestCase):
         self.assertEqual(bqm.offset, 0)
         self.assertIs(bqm.vartype, dimod.BINARY)
 
+    @unittest.skipUnless(_nx, "networkx required")
     def test_edges_networkx(self):
         G = nx.complete_graph(3)
         bqm = dimod.generators.maximum_independent_set(G.edges)
@@ -935,6 +947,7 @@ class TestMaximumIndependentSet(unittest.TestCase):
         self.assertEqual(bqm.offset, 0)
         self.assertIs(bqm.vartype, dimod.BINARY)
 
+    @unittest.skipUnless(_nx, "networkx required")
     def test_edges_and_nodes_networkx(self):
         G = nx.complete_graph(3)
         G.add_node(3)
@@ -948,6 +961,7 @@ class TestMaximumIndependentSet(unittest.TestCase):
         self.assertEqual(dimod.generators.maximum_independent_set([]).shape, (0, 0))
         self.assertEqual(dimod.generators.maximum_independent_set([], []).shape, (0, 0))
 
+    @unittest.skipUnless(_nx, "networkx required")
     def test_empty_networkx(self):
         G = nx.Graph()
         self.assertEqual(dimod.generators.maximum_independent_set(G.edges).shape, (0, 0))
@@ -999,6 +1013,7 @@ class TestMaximumWeightIndependentSet(unittest.TestCase):
         configs = {tuple(sample[v] for v in range(3)) for sample in sampleset.lowest().samples()}
         self.assertEqual(configs, {(0, 1, 0), (1, 0, 1)})
 
+    @unittest.skipUnless(_nx, "networkx required")
     def test_functional_networkx(self):
         G = nx.complete_graph(3)
         G.add_nodes_from([0, 2], weight=.5)
@@ -1015,6 +1030,7 @@ class TestMaximumWeightIndependentSet(unittest.TestCase):
         self.assertEqual(dimod.generators.maximum_weight_independent_set([]).shape, (0, 0))
         self.assertEqual(dimod.generators.maximum_weight_independent_set([], []).shape, (0, 0))
 
+    @unittest.skipUnless(_nx, "networkx required")
     def test_empty_networkx(self):
         G = nx.Graph()
         self.assertEqual(dimod.generators.maximum_weight_independent_set(G.edges).shape, (0, 0))
@@ -1194,6 +1210,7 @@ class TestMagicSquares(unittest.TestCase):
                         self.assertEqual(term, 24)
 
 
+@unittest.skipUnless(_nx, "networkx required")
 class TestMIMO(unittest.TestCase):
 
     def setUp(self):
@@ -1754,7 +1771,6 @@ class TestMIMO(unittest.TestCase):
                                 scale_n = (bqm.offset - bqm0.offset)/EoverN
                                 self.assertGreater(1.5, scale_n)
                                 #self.assertLess(0.5, scale_n)
-                            
 
 
 class TestBPSP(unittest.TestCase):
@@ -1872,6 +1888,7 @@ class TestQuadraticAssignment(unittest.TestCase):
             self.assertEqual(lhs, 0)
 
 
+@unittest.skipUnless(_nx, "networkx required")
 class TestMinVertexColoring(unittest.TestCase):
     def test_chromatic_number(self):
         G = nx.cycle_graph('abcd')
@@ -1893,14 +1910,14 @@ class TestMinVertexColoring(unittest.TestCase):
 
 class TestVertexColoring(unittest.TestCase):
     def test_single_node(self):
-        G = nx.Graph()
-        G.add_node('a')
+        graph = ['a'], []
 
         # a single color
-        bqm = dimod.generators.coloring.vertex_coloring(G, ['red'])
+        bqm = dimod.generators.coloring.vertex_coloring(graph, ['red'])
 
         self.assertEqual(bqm, dimod.BQM.from_qubo({(('a', 'red'), ('a', 'red')): -1}))
 
+    @unittest.skipUnless(_nx, "networkx required")
     def test_4cycle(self):
         G = nx.cycle_graph('abcd')
 
@@ -1931,6 +1948,7 @@ class TestVertexColoring(unittest.TestCase):
 
         self.assertEqual(ground_energy, -len(G))
 
+    @unittest.skipUnless(_nx, "networkx required")
     def test_num_variables(self):
         G = nx.Graph()
         G.add_nodes_from(range(15))
@@ -1943,6 +1961,7 @@ class TestVertexColoring(unittest.TestCase):
         bqm = dimod.generators.coloring.vertex_coloring(G, range(7))
         self.assertEqual(len(bqm.quadratic), len(G)*7*(7-1)/2 + 7)
 
+    @unittest.skipUnless(_nx, "networkx required")
     def test_docstring_stats(self):
         # get a complex-ish graph
         G = nx.karate_club_graph()
@@ -2005,6 +2024,7 @@ class TestMarkovNetwork(unittest.TestCase):
             self.assertAlmostEqual(en, energy)
 
 
+@unittest.skipUnless(_nx, "networkx required")
 @parameterized.parameterized_class(
     'graph',
     [[nx.Graph()],
@@ -2074,6 +2094,7 @@ class TestMatching(unittest.TestCase):
                     self.assertGreater(len(edges), cardinality)
 
 
+@unittest.skipUnless(_nx, "networkx required")
 class TestPartitioning(unittest.TestCase):
     def get_partitions(self, cqm):
         # copied from: :meth:`dwave.graphs.algorithms.partition.partition`.
@@ -2135,7 +2156,15 @@ class TestPartitioning(unittest.TestCase):
         node_partitions = self.get_partitions(cqm)
         self.assertEqual(node_partitions[2], node_partitions[3]) # weight edges are respected
 
+    def test_non_nx_input(self):
+        graph = ['a', 'b', 'c', 'd'], [('a', 'b'), ('c', 'd')]
+        cqm = dimod.generators.graph_partition(graph, num_partitions=2)
+        node_partitions = self.get_partitions(cqm)
+        self.assertTrue(node_partitions['a'] == node_partitions['b'])
+        self.assertTrue(node_partitions['c'] == node_partitions['d'])
 
+
+@unittest.skipUnless(_nx, "networkx required")
 class TestSocial(unittest.TestCase):
     def structural_imbalance(self, graph):
         # see: :meth:`dwave.graphs.social.structural_imbalance`.
@@ -2212,6 +2241,7 @@ class TestSocial(unittest.TestCase):
         self.check_bicolor(colors)
 
 
+@unittest.skipUnless(_nx, "networkx required")
 class TestTSP(unittest.TestCase):
     def check_routes(self, bqm, min_routes, sampleset):
         ground_energy = sampleset.first.energy
