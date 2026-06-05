@@ -12,20 +12,25 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+import itertools
+import math
+import operator
 import unittest
-import unittest.mock
+
+import networkx as nx
+import numpy as np
+import parameterized
 
 import dimod
-import itertools
 
-import numpy as np
-
+# TODO: update to dwave-graphs once released
 try:
-    import networkx as nx
+    import dwave_networkx as dnx
 except ImportError:
-    _networkx = False
+    _dnx = False
 else:
-    _networkx = True
+    _dnx = True
+
 
 class TestRandomGNMRandomBQM(unittest.TestCase):
     def test_bias_generator(self):
@@ -238,7 +243,6 @@ class TestChimeraAnticluster(unittest.TestCase):
                 self.assertIn(j, bqm.adj[i])
                 self.assertIn(bqm.adj[i][j], (-1, 1))
 
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_multitile(self):
         bqm = dimod.generators.chimera_anticluster(2, multiplier=4)
 
@@ -312,7 +316,6 @@ class TestChimeraAnticluster(unittest.TestCase):
             bqm = dimod.generators.chimera_anticluster(0, cls=6)
 
 
-@unittest.skipUnless(_networkx, "no networkx installed")
 class TestFCL(unittest.TestCase):
 
     def setUp(self):
@@ -855,7 +858,6 @@ class TestIndependentSet(unittest.TestCase):
         self.assertEqual(bqm.offset, 0)
         self.assertIs(bqm.vartype, dimod.BINARY)
 
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_edges_networkx(self):
         G = nx.complete_graph(3)
         bqm = dimod.generators.independent_set(G.edges)
@@ -871,7 +873,6 @@ class TestIndependentSet(unittest.TestCase):
         self.assertEqual(bqm.offset, 0)
         self.assertIs(bqm.vartype, dimod.BINARY)
 
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_edges_and_nodes_networkx(self):
         G = nx.complete_graph(3)
         G.add_node(3)
@@ -885,7 +886,6 @@ class TestIndependentSet(unittest.TestCase):
         self.assertEqual(dimod.generators.independent_set([]).shape, (0, 0))
         self.assertEqual(dimod.generators.independent_set([], []).shape, (0, 0))
 
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_empty_networkx(self):
         G = nx.Graph()
         self.assertEqual(dimod.generators.independent_set(G.edges).shape, (0, 0))
@@ -920,7 +920,6 @@ class TestMaximumIndependentSet(unittest.TestCase):
         self.assertEqual(bqm.offset, 0)
         self.assertIs(bqm.vartype, dimod.BINARY)
 
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_edges_networkx(self):
         G = nx.complete_graph(3)
         bqm = dimod.generators.maximum_independent_set(G.edges)
@@ -936,7 +935,6 @@ class TestMaximumIndependentSet(unittest.TestCase):
         self.assertEqual(bqm.offset, 0)
         self.assertIs(bqm.vartype, dimod.BINARY)
 
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_edges_and_nodes_networkx(self):
         G = nx.complete_graph(3)
         G.add_node(3)
@@ -950,7 +948,6 @@ class TestMaximumIndependentSet(unittest.TestCase):
         self.assertEqual(dimod.generators.maximum_independent_set([]).shape, (0, 0))
         self.assertEqual(dimod.generators.maximum_independent_set([], []).shape, (0, 0))
 
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_empty_networkx(self):
         G = nx.Graph()
         self.assertEqual(dimod.generators.maximum_independent_set(G.edges).shape, (0, 0))
@@ -1002,7 +999,6 @@ class TestMaximumWeightIndependentSet(unittest.TestCase):
         configs = {tuple(sample[v] for v in range(3)) for sample in sampleset.lowest().samples()}
         self.assertEqual(configs, {(0, 1, 0), (1, 0, 1)})
 
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_functional_networkx(self):
         G = nx.complete_graph(3)
         G.add_nodes_from([0, 2], weight=.5)
@@ -1019,7 +1015,6 @@ class TestMaximumWeightIndependentSet(unittest.TestCase):
         self.assertEqual(dimod.generators.maximum_weight_independent_set([]).shape, (0, 0))
         self.assertEqual(dimod.generators.maximum_weight_independent_set([], []).shape, (0, 0))
 
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_empty_networkx(self):
         G = nx.Graph()
         self.assertEqual(dimod.generators.maximum_weight_independent_set(G.edges).shape, (0, 0))
@@ -1198,7 +1193,7 @@ class TestMagicSquares(unittest.TestCase):
                     else:
                         self.assertEqual(term, 24)
 
-@unittest.skipUnless(_networkx, "no networkx installed")
+
 class TestMIMO(unittest.TestCase):
 
     def setUp(self):
@@ -1875,3 +1870,527 @@ class TestQuadraticAssignment(unittest.TestCase):
             x = {f'x_{i}_{j}': 1 if i==j else 0 for i in range(num_locations)}
             lhs = cqm.constraints[f'facility_constraint_{j}'].lhs.energy(x)
             self.assertEqual(lhs, 0)
+
+
+class TestMinVertexColoring(unittest.TestCase):
+    def test_chromatic_number(self):
+        G = nx.cycle_graph('abcd')
+
+        # when the chromatic number is fixed this is exactly vertex_color
+        self.assertEqual(
+            dimod.generators.coloring.min_vertex_coloring(G, chromatic_lb=2, chromatic_ub=2),
+            dimod.generators.coloring.vertex_coloring(G, range(2))
+        )
+
+    @parameterized.parameterized.expand([
+        (nx.path_graph(5), ),
+        (nx.cycle_graph(5), ),
+        (nx.complete_graph(3), ),
+    ])
+    def test_smoke(self, G):
+        dimod.generators.min_vertex_coloring(G)
+
+
+class TestVertexColoring(unittest.TestCase):
+    def test_single_node(self):
+        G = nx.Graph()
+        G.add_node('a')
+
+        # a single color
+        bqm = dimod.generators.coloring.vertex_coloring(G, ['red'])
+
+        self.assertEqual(bqm, dimod.BQM.from_qubo({(('a', 'red'), ('a', 'red')): -1}))
+
+    def test_4cycle(self):
+        G = nx.cycle_graph('abcd')
+
+        bqm = dimod.generators.coloring.vertex_coloring(G, range(2))
+
+        sampleset = dimod.ExactSolver().sample(bqm)
+
+        # check that the ground state is a valid coloring
+        ground_energy = sampleset.first.energy
+
+        colorings = []
+        for sample, en in sampleset.data(['sample', 'energy']):
+            if en > ground_energy:
+                break
+
+            coloring = {}
+            for (v, c), val in sample.items():
+                if val:
+                    coloring[v] = c
+
+            is_vertex_coloring = all(coloring[u] != coloring[v] for u, v in G.edges)
+            self.assertTrue(is_vertex_coloring)
+
+            colorings.append(coloring)
+
+        # there are two valid colorings
+        self.assertEqual(len(colorings), 2)
+
+        self.assertEqual(ground_energy, -len(G))
+
+    def test_num_variables(self):
+        G = nx.Graph()
+        G.add_nodes_from(range(15))
+
+        bqm = dimod.generators.coloring.vertex_coloring(G, range(7))
+        self.assertEqual(len(bqm.quadratic), len(G)*7*(7-1)/2)
+
+        # add one edge
+        G.add_edge(0, 1)
+        bqm = dimod.generators.coloring.vertex_coloring(G, range(7))
+        self.assertEqual(len(bqm.quadratic), len(G)*7*(7-1)/2 + 7)
+
+    def test_docstring_stats(self):
+        # get a complex-ish graph
+        G = nx.karate_club_graph()
+
+        colors = range(10)
+
+        bqm = dimod.generators.coloring.vertex_coloring(G, colors)
+
+        self.assertEqual(len(bqm), len(G)*len(colors))
+        self.assertEqual(len(bqm.quadratic), len(G)*len(colors)*(len(colors)-1)/2
+                         + len(G.edges)*len(colors))
+
+
+@unittest.skipUnless(_dnx, "no dwave-graphs installed")
+class TestMarkovNetwork(unittest.TestCase):
+    def test_input_validation(self):
+        with self.assertRaises(ValueError):
+            dimod.generators.markov.markov_network(dict())
+
+    def test_one_node(self):
+        potentials = {'a': {(0,): 1.2, (1,): .4}}
+
+        bqm = dimod.generators.markov.markov_network(dnx.markov_network(potentials))
+
+        for edge, potential in potentials.items():
+            for config, energy in potential.items():
+                sample = dict(zip(edge, config))
+                self.assertAlmostEqual(bqm.energy(sample), energy)
+
+    def test_one_edge(self):
+        potentials = {'ab': {(0, 0): 1.2, (1, 0): .4,
+                             (0, 1): 1.3, (1, 1): -4}}
+
+        bqm = dimod.generators.markov.markov_network(dnx.markov_network(potentials))
+
+        for edge, potential in potentials.items():
+            for config, energy in potential.items():
+                sample = dict(zip(edge, config))
+                self.assertAlmostEqual(bqm.energy(sample), energy)
+
+    def test_typical(self):
+        potentials = {'a': {(0,): 1.5, (1,): -.5},
+                      'ab': {(0, 0): 1.2, (1, 0): .4,
+                             (0, 1): 1.3, (1, 1): -4},
+                      'bc': {(0, 0): 1.7, (1, 0): .4,
+                             (0, 1): -1, (1, 1): -4},
+                      'd': {(0,): -.5, (1,): 1.6}}
+
+        bqm = dimod.generators.markov.markov_network(dnx.markov_network(potentials))
+
+        samples = dimod.ExactSolver().sample(bqm)
+
+        for sample, energy in samples.data(['sample', 'energy']):
+
+            en = 0
+            for interaction, potential in potentials.items():
+                config = tuple(sample[v] for v in interaction)
+                en += potential[config]
+
+            self.assertAlmostEqual(en, energy)
+
+
+@parameterized.parameterized_class(
+    'graph',
+    [[nx.Graph()],
+     [nx.path_graph(10)],
+     [nx.complete_graph(4)],
+     [nx.Graph([(0, 1), (0, 2), (1, 2), (1, 3), (2, 4), (3, 4), (3, 5)])],
+     [nx.Graph([(0, 1), (0, 2), (1, 2), (1, 3), (1, 4), (1, 5)])],
+     [nx.Graph([(0, 1), (0, 2), (1, 2), (1, 3), (2, 4), (3, 4)])],
+     [nx.Graph({0: [], 1: [6], 2: [5], 3: [4], 4: [3], 2: [5], 6: [1]})],
+     ]
+    )
+class TestMatching(unittest.TestCase):
+    def test_matching(self):
+        bqm = dimod.generators.matching(self.graph)
+
+        # the ground states should be exactly the matchings of G
+        sampleset = dimod.ExactSolver().sample(bqm)
+
+        for sample, energy in sampleset.data(['sample', 'energy']):
+            edges = [v for v, val in sample.items() if val > 0]
+            self.assertEqual(nx.is_matching(self.graph, edges), energy == 0)
+            self.assertTrue(energy == 0 or energy >= 1)
+
+    def test_maximal_matching(self):
+        bqm = dimod.generators.maximal_matching(self.graph)
+
+        # the ground states should be exactly the maximal matchings of G
+        sampleset = dimod.ExactSolver().sample(bqm)
+
+        for sample, energy in sampleset.data(['sample', 'energy']):
+            edges = set(v for v, val in sample.items() if val > 0)
+            self.assertEqual(nx.is_maximal_matching(self.graph, edges),
+                             energy == 0)
+            self.assertGreaterEqual(energy, 0)
+
+    def test_min_maximal_matching_bqm(self):
+        bqm = dimod.generators.min_maximal_matching(self.graph)
+
+        if len(self.graph) == 0:
+            self.assertEqual(len(bqm.linear), 0)
+            return
+
+        # the ground states should be exactly the minimum maximal matchings of
+        # G
+        sampleset = dimod.ExactSolver().sample(bqm)
+
+        # we'd like to use sampleset.lowest() but it didn't exist in dimod
+        # 0.8.0
+        ground_energy = sampleset.first.energy
+        cardinalities = set()
+        for sample, energy in sampleset.data(['sample', 'energy']):
+            if energy > ground_energy:
+                continue
+            edges = set(v for v, val in sample.items() if val > 0)
+            self.assertTrue(nx.is_maximal_matching(self.graph, edges))
+            cardinalities.add(len(edges))
+
+        # all ground have the same cardinality (or it's empty)
+        self.assertEqual(len(cardinalities), 1)
+        cardinality, = cardinalities
+
+        # everything that's not ground has a higher energy
+        for sample, energy in sampleset.data(['sample', 'energy']):
+            edges = set(v for v, val in sample.items() if val > 0)
+            if energy != sampleset.first.energy:
+                if nx.is_maximal_matching(self.graph, edges):
+                    self.assertGreater(len(edges), cardinality)
+
+
+class TestPartitioning(unittest.TestCase):
+    def get_partitions(self, cqm):
+        # copied from: :meth:`dwave.graphs.algorithms.partition.partition`.
+
+        sampler = dimod.ExactCQMSolver()
+        response = sampler.sample_cqm(cqm)
+        possible_partitions = response.filter(lambda d: d.is_feasible)
+
+        if not possible_partitions:
+            return {}
+
+        indicators = (key for key, value in possible_partitions.first.sample.items() if math.isclose(value, 1.))
+        node_partition = {key[0]: key[1] for key in indicators}
+        return node_partition
+
+    def test_edge_cases(self):
+        G = nx.Graph()
+        cqm = dimod.generators.partition.graph_partition(G, num_partitions=2)
+        node_partitions = self.get_partitions(cqm)
+        self.assertTrue(node_partitions == {})
+
+    def test_typical_cases(self):
+        G = nx.complete_graph(8)
+        cqm = dimod.generators.partition.graph_partition(G, num_partitions=4)
+        node_partitions = self.get_partitions(cqm)
+        for i in range(4):
+            self.assertEqual(sum(x == i for x in node_partitions.values()), 2) # 4 equally sized subsets
+
+        cqm = dimod.generators.partition.graph_partition(8, num_partitions=4)
+        node_partitions2 = self.get_partitions(cqm)
+        self.assertEqual(node_partitions, node_partitions2)
+
+        G = nx.complete_graph(10)
+        cqm = dimod.generators.partition.graph_partition(G, num_partitions=2)
+        node_partitions = self.get_partitions(cqm)
+        self.assertEqual(sum(x == 0 for x in node_partitions.values()), 5)  # half of the nodes in subset '0'
+
+        nx.set_edge_attributes(G, 1, 'weight')
+        cqm = dimod.generators.partition.graph_partition(G, num_partitions=2)
+        node_partitions = self.get_partitions(cqm)
+        self.assertEqual(sum(x == 0 for x in node_partitions.values()), 5)  # half of the nodes in subset '0'
+
+        G = nx.Graph()
+        G.add_edges_from([(0, 1), (0, 2), (1, 2), (1, 3), (3, 4), (2, 4)])
+        cqm = dimod.generators.partition.graph_partition(G, num_partitions=2)
+        node_partitions = self.get_partitions(cqm)
+        self.assertIn(sum(x == 0 for x in node_partitions.values()), (2, 3)) # either 2 or 3 nodes in subset '0' (ditto '1')
+
+        G = nx.Graph()
+        G.add_edges_from([(0, 1), (0, 2), (1, 2), (2, 3), (3, 4), (3, 5), (4, 5)])
+        cqm = dimod.generators.partition.graph_partition(G, num_partitions=2)
+        node_partitions = self.get_partitions(cqm)
+        self.assertTrue(node_partitions[0] == node_partitions[1] == node_partitions[2])
+        self.assertTrue(node_partitions[3] == node_partitions[4] == node_partitions[5])
+
+        nx.set_edge_attributes(G, values=1, name='weight')
+        nx.set_edge_attributes(G, values={(2, 3): 100}, name='weight')
+        cqm = dimod.generators.partition.graph_partition(G, num_partitions=2)
+        node_partitions = self.get_partitions(cqm)
+        self.assertEqual(node_partitions[2], node_partitions[3]) # weight edges are respected
+
+
+class TestSocial(unittest.TestCase):
+    def structural_imbalance(self, graph):
+        # see: :meth:`dwave.graphs.social.structural_imbalance`.
+
+        bqm = dimod.generators.social.structural_imbalance(graph)
+
+        # use the exact solver to find low energy states
+        sampler = dimod.ExactSolver()
+        response = sampler.sample(bqm)
+
+        # we want the lowest energy sample
+        sample = response.first.sample
+
+        # spins determine the color
+        colors = {v: (spin + 1) // 2 for v, spin in sample.items()}
+        return colors
+
+    def check_bicolor(self, colors):
+        # colors should be ints and either 0 or 1
+        for c in colors.values():
+            self.assertIn(c, (0, 1))
+
+    def all_eq(self, l):
+        return all(itertools.starmap(operator.eq, zip(l, l[1:])))
+
+    def test_structural_imbalance_basic(self):
+        blueteam = ['Alice', 'Bob', 'Carol']
+        redteam0 = ['Eve']
+        redteam1 = ['Mallory', 'Trudy']
+
+        S = nx.Graph()
+        for p0, p1 in itertools.combinations(blueteam, 2):
+            S.add_edge(p0, p1, sign=1)
+
+        S.add_edge(*redteam1, sign=1)
+        for p0 in blueteam:
+            for p1 in redteam0:
+                S.add_edge(p0, p1, sign=-1)
+            for p1 in redteam1:
+                S.add_edge(p0, p1, sign=-1)
+
+        colors = self.structural_imbalance(S)
+        self.check_bicolor(colors)
+
+        # blue team is one color, and red team another
+        self.assertTrue(self.all_eq([colors[n] for n in blueteam]))
+        self.assertTrue(self.all_eq([colors[n] for n in (redteam0 + redteam1)]))
+        self.assertNotEqual(colors[blueteam[0]], colors[redteam0[0]])
+
+        greenteam = ['Ted']
+        for p0 in set(S.nodes):
+            for p1 in greenteam:
+                S.add_edge(p0, p1, sign=1)
+
+        colors = self.structural_imbalance(S)
+        self.check_bicolor(colors)
+
+    def test_non_nx_graph(self):
+        with self.assertRaises(ValueError):
+            dimod.generators.social.structural_imbalance({'a': 1})
+
+    def test_invalid_graph(self):
+        S = nx.Graph()
+        S.add_edge('Alice', 'Bob')
+
+        with self.assertRaises(ValueError):
+            dimod.generators.social.structural_imbalance(S)
+
+    def test_frustrated_hostile_edge(self):
+        S = nx.florentine_families_graph()
+        nx.set_edge_attributes(S, -1, 'sign')
+
+        colors = self.structural_imbalance(S)
+        self.check_bicolor(colors)
+
+
+class TestTSP(unittest.TestCase):
+    def check_routes(self, bqm, min_routes, sampleset):
+        ground_energy = sampleset.first.energy
+
+        # all possible routes are equally good
+        for route in min_routes:
+            sample = {v: 0 for v in bqm.variables}
+            for idx, city in enumerate(route):
+                sample[(city, idx)] = 1
+            self.assertAlmostEqual(bqm.energy(sample), ground_energy)
+
+        # all min-energy solutions are valid routes
+        ground_count = 0
+        for sample, energy in sampleset.data(['sample', 'energy']):
+            if abs(energy - ground_energy) > .001:
+                break
+            ground_count += 1
+
+        self.assertEqual(ground_count, len(min_routes))
+
+    def test_empty(self):
+        bqm = dimod.generators.tsp.traveling_salesperson(nx.Graph())
+        self.assertEqual(bqm.to_qubo(), ({}, 0))
+
+    def test_k3(self):
+        # 3cycle so all paths are equally good
+        G = nx.Graph()
+        G.add_weighted_edges_from([('a', 'b', 0.5),
+                                   ('b', 'c', 1.0),
+                                   ('a', 'c', 2.0)])
+
+        bqm = dimod.generators.tsp.traveling_salesperson(G, lagrange=10)
+
+        # all routes are min weight
+        min_routes = list(itertools.permutations(G.nodes))
+
+        # get the min energy of the qubo
+        sampleset = dimod.ExactSolver().sample(bqm)
+
+        self.check_routes(bqm, min_routes, sampleset)
+
+    def test_k3_bidirectional(self):
+        G = nx.DiGraph()
+        G.add_weighted_edges_from([('a', 'b', 0.5),
+                                   ('b', 'a', 0.5),
+                                   ('b', 'c', 1.0),
+                                   ('c', 'b', 1.0),
+                                   ('a', 'c', 2.0),
+                                   ('c', 'a', 2.0)])
+
+        bqm = dimod.generators.tsp.traveling_salesperson(G, lagrange=10)
+
+        # all routes are min weight
+        min_routes = list(itertools.permutations(G.nodes))
+
+        # get the min energy of the qubo
+        sampleset = dimod.ExactSolver().sample(bqm)
+
+        self.check_routes(bqm, min_routes, sampleset)
+
+    def test_graph_missing_edges(self):
+        G1 = nx.Graph()
+        G1.add_weighted_edges_from([
+            ('a', 'b', 0.5),
+            ('b', 'c', 1.0),
+            ('a', 'c', 2.0),
+        ])
+        bqm1 = dimod.generators.tsp.traveling_salesperson(G1, lagrange=10)
+
+        G2 = nx.Graph()
+        G2.add_weighted_edges_from([
+            ('a', 'b', 0.5),
+            ('a', 'c', 2.0),
+        ])
+        # make sure that missing_edge_weight gets applied correctly
+        bqm2 = dimod.generators.tsp.traveling_salesperson(G2, lagrange=10, missing_edge_weight=1.0)
+
+        self.assertEqual(bqm1, bqm2)
+
+    def test_digraph_missing_edges(self):
+        G1 = nx.DiGraph()
+        G1.add_weighted_edges_from([
+            ('a', 'b', 0.5),
+            ('b', 'a', 0.8),
+            ('b', 'c', 1.0),
+            ('c', 'b', 0.7),
+            ('a', 'c', 2.0),
+            ('c', 'a', 2.0),
+        ])
+        bqm1 = dimod.generators.tsp.traveling_salesperson(G1, lagrange=10)
+
+        G2 = nx.DiGraph()
+        G2.add_weighted_edges_from([
+            ('a', 'b', 0.5),
+            ('b', 'a', 0.8),
+            ('c', 'b', 0.7),
+            ('a', 'c', 2.0),
+            ('c', 'a', 2.0),
+        ])
+
+        # make sure that missing_edge_weight gets applied correctly
+        bqm2 = dimod.generators.tsp.traveling_salesperson(G2, lagrange=10, missing_edge_weight=1.0)
+
+        self.assertEqual(bqm1, bqm2)
+
+    def test_k4_equal_weights(self):
+        # k5 with all equal weights so all paths are equally good
+        G = nx.Graph()
+        G.add_weighted_edges_from((u, v, .5)
+                                  for u, v in itertools.combinations(range(4), 2))
+
+        bqm = dimod.generators.tsp.traveling_salesperson(G, lagrange=10)
+
+        # all routes are min weight
+        min_routes = list(itertools.permutations(G.nodes))
+
+        # get the min energy of the qubo
+        sampleset = dimod.ExactSolver().sample(bqm)
+
+        self.check_routes(bqm, min_routes, sampleset)
+
+    def test_k4(self):
+        # good routes are 0,1,2,3 or 3,2,1,0 (and their rotations)
+        G = nx.Graph()
+        G.add_weighted_edges_from([(0, 1, 1),
+                                   (1, 2, 1),
+                                   (2, 3, 1),
+                                   (3, 0, 1),
+                                   (0, 2, 2),
+                                   (1, 3, 2)])
+
+        bqm = dimod.generators.tsp.traveling_salesperson(G, lagrange=10)
+
+        # good routes won't have 0<->2 or 1<->3
+        min_routes = [(0, 1, 2, 3),
+                      (1, 2, 3, 0),
+                      (2, 3, 0, 1),
+                      (1, 2, 3, 0),
+                      (3, 2, 1, 0),
+                      (2, 1, 0, 3),
+                      (1, 0, 3, 2),
+                      (0, 3, 2, 1)]
+
+        # get the min energy of the qubo
+        sampleset = dimod.ExactSolver().sample(bqm)
+
+        self.check_routes(bqm, min_routes, sampleset)
+
+    def test_weighted_complete_graph(self):
+        G = nx.Graph()
+        G.add_weighted_edges_from({(0, 1, 1), (0, 2, 100),
+                                   (0, 3, 1), (1, 2, 1),
+                                   (1, 3, 100), (2, 3, 1)})
+
+        lagrange = 5.0
+
+        bqm = dimod.generators.tsp.traveling_salesperson(G, lagrange, 'weight')
+
+        N = G.number_of_nodes()
+        correct_sum = G.size('weight')*2*N-2*N*N*lagrange+2*N*N*(N-1)*lagrange
+
+        actual_sum = sum(bqm.linear.values()) + sum(bqm.quadratic.values())
+
+        self.assertEqual(correct_sum, actual_sum)
+
+    def test_exceptions(self):
+        G = nx.Graph([(0, 1)])
+        with self.assertRaises(ValueError):
+            dimod.generators.tsp.traveling_salesperson(G)
+
+    def test_docstring_size(self):
+        # in the docstring we state the size of the resulting BQM, this checks
+        # that
+        for n in range(3, 20):
+            G = nx.Graph()
+            G.add_weighted_edges_from((u, v, .5)
+                                      for u, v
+                                      in itertools.combinations(range(n), 2))
+            bqm = dimod.generators.tsp.traveling_salesperson(G)
+
+            self.assertEqual(len(bqm), n**2)
+            self.assertEqual(len(bqm.quadratic), 2*n*n*(n - 1))

@@ -16,19 +16,12 @@ import concurrent.futures
 import typing
 import unittest
 import itertools
-
 from collections.abc import Sequence
 from operator import itemgetter
 
-try:
-    import networkx as nx
-except ImportError:
-    _networkx = False
-else:
-    _networkx = True
+import networkx as nx
 
 import dimod
-
 from dimod.vartypes import SPIN, BINARY
 from dimod.decorators import vartype_argument, graph_argument
 
@@ -183,7 +176,6 @@ class TestVartypeArgument(unittest.TestCase):
 
 
 class TestGraphArgument(unittest.TestCase):
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_networkx_graph(self):
         @graph_argument('G')
         def f(G):
@@ -311,7 +303,6 @@ class TestGraphArgument(unittest.TestCase):
             def f(G):
                 pass
 
-    @unittest.skipUnless(_networkx, "no networkx installed")
     def test_as_networkx_graph(self):
         from networkx.utils import graphs_equal
 

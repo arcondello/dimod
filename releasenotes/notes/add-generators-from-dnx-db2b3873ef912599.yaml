@@ -1,0 +1,28 @@
+---
+prelude: >
+    Binary and constrained quadratic model generators that used to reside in
+    ``dwave-networkx`` (now ``dwave-graphs``) have been moved to
+    ``dimod.generators``.
+features:
+  - |
+    Add generators for binary quadratic models with ground states corresponding
+    to a vertex coloring (``dimod.generators.vertex_coloring``) and a minimum
+    vertex coloring (``dimod.generators.min_vertex_coloring``).
+  - |
+    Add a binary quadratic model generator for a Markov network
+    (``dimod.generators.markov_network``).
+  - |
+    Add generators binary quadratic models with ground states corresponding to
+    a graph matching (``dimod.generators.matching``), graphs's maximal matching
+    (``dimod.generators.maximal_matching``) and graph's minimum maximal matching
+    (``dimod.generators.min_maximal_matching``).
+  - |
+    Add a generator for a constrained quadratic model with ground states
+    corresponding to a balanced k-partition of graph
+    (``dimod.generators.graph_partition``).
+  - |
+    Add a binary quadratic model generator to calculate the structural imbalance
+    of a signed social network (``dimod.generators.structural_imbalance``).
+  - |
+    Add a generator for a binary quadratic model with ground states corresponding
+    to a minimum TSP route (``dimod.generators.traveling_salesperson``).
