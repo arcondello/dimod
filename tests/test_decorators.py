@@ -19,7 +19,10 @@ import itertools
 from collections.abc import Sequence
 from operator import itemgetter
 
-import networkx as nx
+try:
+    import networkx as nx
+except ImportError:
+    nx = None
 
 import dimod
 from dimod.vartypes import SPIN, BINARY
@@ -176,6 +179,7 @@ class TestVartypeArgument(unittest.TestCase):
 
 
 class TestGraphArgument(unittest.TestCase):
+    @unittest.skipUnless(nx, "networkx not installed")
     def test_networkx_graph(self):
         @graph_argument('G')
         def f(G):
@@ -303,6 +307,7 @@ class TestGraphArgument(unittest.TestCase):
             def f(G):
                 pass
 
+    @unittest.skipUnless(nx, "networkx not installed")
     def test_as_networkx_graph(self):
         from networkx.utils import graphs_equal
 
@@ -340,6 +345,15 @@ class TestGraphArgument(unittest.TestCase):
 
             self.assertIsInstance(G, nx.Graph)
             self.assertTrue(graphs_equal(G, nx.Graph(edges)))
+
+    @unittest.skipIf(nx, "networkx is installed")
+    def test_as_networkx_graph_without_networkx(self):
+        @graph_argument('g', as_networkx=True)
+        def f(g):
+            return g
+
+        with self.assertRaisesRegex(RuntimeError, "requires NetworkX"):
+            f(1)
 
 
 class TestForwardingMethod(unittest.TestCase):

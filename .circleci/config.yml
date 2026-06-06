@@ -156,7 +156,7 @@ jobs:
           command: |
             . env/bin/activate
             asv machine --yes
-            asv run --quick
+            asv run --quick HEAD^!
 
   # we could do this as part of the various test jobs but getting the pathing
   # and configuration to work correctly is a pain. And since there is not
