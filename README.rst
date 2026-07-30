@@ -53,3 +53,44 @@ Installation from `PyPI <https://pypi.org/project/dimod>`_:
 .. code-block:: bash
 
     pip install dimod
+
+During package development, it is often convenient to use an editable install.
+See `meson-python's editable installs
+<https://meson-python.readthedocs.io/en/latest/how-to-guides/editable-installs.html>`_
+for more details.
+
+.. code-block:: bash
+
+    pip install --group dev
+    pip install --editable . \
+        --no-build-isolation \
+        --config-settings=editable-verbose=true
+
+Testing
+=======
+
+All code should be thoroughly tested and all pull requests should include tests.
+
+To run the Python tests, first install the package using an editable install
+as described above. The tests can then be run with
+`unittest <https://docs.python.org/3/library/unittest.html>`_.
+
+.. code-block:: bash
+
+    python -m unittest
+
+To run the C++ tests, first install the project dependencies, then setup a
+``meson`` build directory. You must configure the build as a debug build for
+the tests to run.
+
+.. code-block:: bash
+
+    pip install --group dev
+    meson setup build -Dbuildtype=debug
+
+You can then run the tests using
+`meson's test framework <https://mesonbuild.com/Unit-tests.html>`_.
+
+.. code-block:: bash
+
+    meson test -Cbuild
