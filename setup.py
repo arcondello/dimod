@@ -60,7 +60,6 @@ class build_ext(_build_ext):
 
 
 setup(
-    name='dimod',
     cmdclass=dict(build_ext=build_ext),
     ext_modules=cythonize(
         ['dimod/binary/cybqm/*.pyx',
@@ -73,11 +72,4 @@ setup(
         annotate=True,
         nthreads=int(os.getenv('CYTHON_NTHREADS', 0)),
         ),
-    install_requires=[
-        # this is the oldest supported NumPy on Python 3.8
-        'numpy>=1.17.3',
-        ],
-    # we use the generic 'all' so that in the future we can add or remove
-    # packages without breaking things
-    extras_require=dict(all=''),
 )

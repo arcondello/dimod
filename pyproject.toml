@@ -6,6 +6,47 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "dimod"
+dynamic = ["version"]
+authors = [
+    {name = "D-Wave", email = "tools@dwavesys.com"},
+]
+description = "A shared API for binary quadratic model samplers."
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+classifiers = [
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX",
+    "Operating System :: Unix",
+    "Operating System :: MacOS",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3 :: Only",
+    'Programming Language :: Python :: Implementation :: CPython',
+]
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.17.3",  # oldest supported NumPy on Python 3.8
+]
+
+[project.optional-dependencies]
+all = []  # left in for backward- and forward-compatibility
+
+[project.readme]
+file = "README.rst"
+content-type = "text/x-rst"
+
+[project.urls]
+Changelog = "https://github.com/dwavesystems/dimod/releases"
+Documentation = "https://docs.dwavequantum.com"
+"Source Code" = "https://github.com/dwavesystems/dimod"
+
 [tool.cibuildwheel]
 build-verbosity = "1"
 skip = "pp* *musllinux*"
