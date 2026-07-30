@@ -1,7 +1,6 @@
 version: 2.1
 
 orbs:
-  codecov: codecov/codecov@3
   win: circleci/windows@5.0
   macos: circleci/macos@2.4
 
@@ -158,36 +157,6 @@ jobs:
             asv machine --yes
             asv run --quick HEAD^!
 
-  # we could do this as part of the various test jobs but getting the pathing
-  # and configuration to work correctly is a pain. And since there is not
-  # significant different between the linux/osx/windows code I think it
-  # suffices to just do it once
-  test-codecov:
-    docker:
-      - image: cimg/python:3.12
-
-    steps:
-      - checkout
-      - run:
-          name: run c++ coverage
-          command: |
-            sudo apt update
-            sudo apt install lcov
-            make -C testscpp/ catch2 coverage
-      - run:
-          name: run python coverage
-          command: |
-            python -m venv env
-            . env/bin/activate
-            pip install -r requirements.txt -r tests/requirements.txt
-            python setup.py build_ext --inplace
-            coverage run -m unittest
-            coverage xml
-      - codecov/upload:
-          file: coverage.xml
-      - codecov/upload:
-          file: testscpp/coverage.info
-
   test-doctest:
     docker:
       - image: cimg/python:3.10  # As of October 2024, RTD uses 3.10
@@ -303,7 +272,6 @@ workflows:
       - build-osx: *build
       - build-windows: *build
       - test-airspeed-velocity
-      - test-codecov
       - test-doctest
       - test-linux:
           name: test-linux-<< matrix.dependencies >>-py<< matrix.python-version >>
