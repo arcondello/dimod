@@ -9,7 +9,7 @@ commands:
     parameters:
       cibw-version:
         type: string
-        default: 3.4.1
+        default: 4.1.1  # latest as of July 2026
     steps:
       - run:
           name: run cibuildwheel
@@ -93,7 +93,8 @@ jobs:
           command: |
             python -m venv env
             . env/bin/activate
-            pip install -r requirements.txt
+            pip install pip --upgrade
+            pip install --group dev
             python setup.py sdist -d ./dist
       - store_artifacts: *store-artifacts
       - persist_to_workspace: *persist-to-workspace
@@ -151,8 +152,8 @@ jobs:
           command: |
             python -m venv env
             . env/bin/activate
-            pip install -r requirements.txt
-            pip install -r docs/requirements.txt
+            pip install pip --upgrade
+            pip install --group dev --group docs
       - run:
           name: build dimod
           command: |
@@ -201,8 +202,9 @@ jobs:
           name: run tests
           command: |
             . env/bin/activate
+            pip install pip --upgrade
+            pip install --group test
             cd tests/
-            pip install -r requirements.txt
             python -m unittest
 
   test-linux-cpp:
