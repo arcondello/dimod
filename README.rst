@@ -1,7 +1,7 @@
-.. image:: https://img.shields.io/pypi/v/dimod.svg
+.. image:: https://img.shields.io/pypi/v/dimod.svg?style=svg
     :target: https://pypi.org/project/dimod
 
-.. image:: https://img.shields.io/pypi/pyversions/dimod.svg
+.. image:: https://img.shields.io/pypi/pyversions/dimod.svg?style=svg
     :target: https://pypi.python.org/pypi/dimod
 
 .. image:: https://circleci.com/gh/dwavesystems/dimod.svg?style=svg
